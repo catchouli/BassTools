@@ -1,5 +1,5 @@
 use sycamore::prelude::*;
-use crate::constants::*;
+use crate::resources::*;
 
 /// The footer.
 #[component]
