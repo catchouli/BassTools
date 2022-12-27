@@ -1,6 +1,7 @@
 mod routes;
 mod components;
 mod pages;
+mod constants;
 
 use sycamore::prelude::*;
 
