@@ -33,15 +33,7 @@ pub fn MainLayout<G: Html>(cx: Scope, props: MainLayoutProps<G>) -> View<G> {
                     }
                 }
             }
-            footer(class="footer") {
-                div(class="content has-text-centered") {
-                    p {
-                        a(href="https://github.com/catchouli/basstools") { "BassTools" }
-                        " by "
-                        a(href="mailto:cat@cat.bio") { "Caitlin Wilks" }
-                    }
-                }
-            }
+            Footer
         }
     )
 }
