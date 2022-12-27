@@ -1,7 +1,35 @@
-#ferris {
-  width: 100px;
+ @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300&display=swap');
+
+.main-layout {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  justify-content: flex-start;
 }
 
 .footer {
   padding-bottom: 3rem;
+  margin-top: auto;
+}
+
+.navbar {
+  border-bottom: 2px solid #f5f5f5;
+}
+
+#site-logo {
+  font-family: 'Kanit', sans-serif;
+  font-size: 30pt;
+  color: black;
+  margin-bottom: 0;
+}
+
+#site-logo img {
+  position: relative;
+  top: 0.1rem;
+  height: 2rem;
+  margin-right: 0.5rem;
+}
+
+#ferris {
+  width: 100px;
 }

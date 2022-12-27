@@ -1,6 +1,9 @@
 /// The website name.
 pub const SITE_NAME: &str = "BassTools";
 
+/// The website logo.
+pub const SITE_LOGO: &str = "images/bass-clef.svg";
+
 /// The github link.
 pub const GITHUB_URL: &str = "https://github.com/catchouli/basstools";
 
