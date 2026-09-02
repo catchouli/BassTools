@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Circle of Fourths Practice</title>
 <meta name="description" content="A looping circle-of-fourths practice trainer for bass guitar, with metronome, tempo and volume, and drone / major / minor modes.">
 <style>
@@ -292,16 +293,16 @@
     <div class="brand">
       <span class="lamp" aria-hidden="true"></span>
       <span class="wordmark">Bass<b>Tools</b></span>
-      <span class="tagline">Practice rig for the low end</span>
+      <span class="tagline">Bass practice tools</span>
     </div>
     <button class="theme-btn" id="themeBtn" type="button">Theme</button>
   </header>
 
   <p class="lede">
-    <strong>Circle of Fourths Practice.</strong> Loop through all twelve keys the way
-    walking lines and jazz heads move — <em>C, F, B&flat;, E&flat;, A&flat;, D&flat;, G&flat;, B, E, A, D, G</em> —
-    with a click running underneath. Pick a mode, set tempo and volume, choose how many times
-    around, and hit play. Headphones or an amp recommended; the tones sit low.
+    <strong>Circle of Fourths Practice.</strong> Work the twelve keys in fourths
+    &mdash; <em>C, F, B&flat;, E&flat;, A&flat;, D&flat;, G&flat;, B, E, A, D, G</em> &mdash;
+    against a metronome. Pick a mode, set the tempo and volume, choose how many times to loop,
+    and press play. Use headphones or an amp; the notes are low.
   </p>
 
   <div class="console" id="console">
@@ -371,15 +372,15 @@
     <h2>The cycle</h2>
     <div class="cycle" id="cycle"></div>
     <div class="pattern-line">
-      <span class="lbl" id="patLbl">Pattern per key — shown in C</span>
+      <span class="lbl" id="patLbl">Pattern per key</span>
       <span class="notes" id="patNotes"></span>
     </div>
   </section>
 
   <footer>
     Each pass plays every key in fourths. Drone holds the tonic for a bar; the scale modes
-    run one octave up and back down in eighth notes — fifteen notes over two bars — then move on.
-    Nothing is recorded or sent anywhere; the sound is generated live in your browser.
+    run one octave up and back down in eighth notes &mdash; fifteen notes over two bars &mdash; then
+    move on. Nothing is recorded or sent anywhere; the sound is generated live in your browser.
   </footer>
 </div>
 
@@ -387,14 +388,26 @@
 (function(){
   "use strict";
 
+  var FLAT  = String.fromCharCode(0x266D); // musical flat sign
+  var MDASH = String.fromCharCode(0x2014); // em dash
+  var MIDDOT = String.fromCharCode(0x00B7); // middle dot
+  var APPROX = String.fromCharCode(0x2248); // almost-equal sign
   var KEYS = [
-    {n:"C",pc:0},{n:"F",pc:5},{n:"B♭",pc:10},{n:"E♭",pc:3},
-    {n:"A♭",pc:8},{n:"D♭",pc:1},{n:"G♭",pc:6},{n:"B",pc:11},
+    {n:"C",pc:0},{n:"F",pc:5},{n:"B"+FLAT,pc:10},{n:"E"+FLAT,pc:3},
+    {n:"A"+FLAT,pc:8},{n:"D"+FLAT,pc:1},{n:"G"+FLAT,pc:6},{n:"B",pc:11},
     {n:"E",pc:4},{n:"A",pc:9},{n:"D",pc:2},{n:"G",pc:7}
   ];
   var MAJOR = [0,2,4,5,7,9,11,12];
   var MINOR = [0,2,3,5,7,8,10,12];
-  var FLATNAMES = ["C","D♭","D","E♭","E","F","G♭","G","A♭","A","B♭","B"];
+  var FLATNAMES = ["C","D"+FLAT,"D","E"+FLAT,"E","F","G"+FLAT,"G","A"+FLAT,"A","B"+FLAT,"B"];
+  var SHARP = String.fromCharCode(0x266F); // musical sharp sign
+  var SHARPNAMES = ["C","C"+SHARP,"D","D"+SHARP,"E","F","F"+SHARP,"G","G"+SHARP,"A","A"+SHARP,"B"];
+  // Which keys are written with sharps rather than flats, per mode
+  function keyUsesSharp(name, mode){
+    if(name.length !== 1) return false;                 // B/E/A/D/G/C/F only
+    return mode === "major" ? "GDAEB".indexOf(name) !== -1
+                            : (name === "E" || name === "B");
+  }
   var MODE_LABEL = {drone:"Drone",major:"Major scale",minor:"Minor scale"};
   var CENTER = 170, RING_R = 150;
 
@@ -467,11 +480,17 @@
   }
 
   // ---- note name pattern (reference, in C) ----
-  function patternNames(mode){
-    if(mode==="drone") return "C  (held for one bar)";
-    var iv = mode==="major" ? MAJOR : MINOR;
-    var full = iv.concat(iv.slice(0,7).reverse());
-    return full.map(function(st){ return FLATNAMES[st%12]; }).join(" ");
+  function patternNames(mode, ki){
+    var name = KEYS[ki].n;
+    if(mode === "drone") return name + "   held for one bar";
+    var names = keyUsesSharp(name, mode) ? SHARPNAMES : FLATNAMES;
+    var pc = KEYS[ki].pc;
+    return scalePattern(mode).map(function(st){ return names[(pc + st) % 12]; }).join(" ");
+  }
+
+  function showPattern(mode, ki){
+    patLbl.textContent = "Pattern per key " + MDASH + " " + KEYS[ki].n + " " + MODE_LABEL[mode].toLowerCase();
+    patNotes.textContent = patternNames(mode, ki);
   }
 
   // ---- estimate ----
@@ -491,25 +510,24 @@
     var bpk = beatsPerKey(mode);
     var perLoop = 12 * bpk * 60 / bpm;
     var total = perLoop * loops;
-    estimateEl.innerHTML = "&approx; <b>" + fmtTime(total) + "</b> total &middot; " +
+    estimateEl.innerHTML = APPROX + " <b>" + fmtTime(total) + "</b> total " + MIDDOT + " " +
       fmtTime(perLoop) + " per lap";
     bpmVal.textContent = bpm;
     volVal.textContent = volEl.value;
     loopValEl.textContent = loops;
-    loopMinus.disabled = loops<=1;
-    loopPlus.disabled = loops>=24;
-    patLbl.textContent = "Pattern per key — shown in C · " + MODE_LABEL[mode];
-    patNotes.textContent = patternNames(mode);
+    loopMinus.disabled = playing || loops<=1;
+    loopPlus.disabled = playing || loops>=24;
     if(!playing){
       dcSub.textContent = MODE_LABEL[mode];
       buildBeatDots(bpk);
+      showPattern(mode, 0);
     }
   }
 
   // ================= AUDIO =================
   var ctx=null, master=null, lp=null, noteBus=null, metroBus=null;
   var playing=false, scheduler=null, rafId=null;
-  var beatCounter=0, nextBeatTime=0;
+  var stepCounter=0, nextStepTime=0;   // scheduler counts eighth-note steps
   var cfg={};
   var playhead=[];
   var live=[];  // active source nodes for hard-stop
@@ -577,40 +595,48 @@
     o.onended = function(){ var k=live.indexOf(o); if(k>-1) live.splice(k,1); };
   }
 
-  function scheduleKey(ki, T, spb){
-    var tonic = 48 + KEYS[ki].pc;
-    if(cfg.mode==="drone"){
-      playNote(mtof(tonic), T, cfg.bpk*spb, true);
-    }else{
-      var iv = cfg.mode==="major" ? MAJOR : MINOR;
-      var full = iv.concat(iv.slice(0,7).reverse());
-      for(var n=0;n<full.length;n++){
-        playNote(mtof(tonic+full[n]), T + n*0.5*spb, 0.46*spb, false);
-      }
-    }
+  // 15-note ascending-then-descending scale, one octave
+  function scalePattern(mode){
+    var iv = mode === "major" ? MAJOR : MINOR;
+    return iv.concat(iv.slice(0,7).reverse());
   }
 
+  // The scheduler advances one eighth note at a time and only commits the
+  // sound for the current step, so a tempo change on the slider is picked up
+  // within a single step instead of a whole key's worth of pre-scheduled notes.
   function schedule(){
     if(!playing || !ctx) return;
-    var spb = 60 / (+bpmEl.value);
-    while(nextBeatTime < ctx.currentTime + 0.2){
-      if(beatCounter >= cfg.loops * cfg.loopLen){
-        playhead.push({t:nextBeatTime, done:true});
+    var spb = 60 / (+bpmEl.value);      // seconds per beat, read live
+    var sEighth = spb * 0.5;
+    var pattern = cfg.mode === "drone" ? null : scalePattern(cfg.mode);
+
+    while(nextStepTime < ctx.currentTime + 0.12){
+      if(stepCounter >= cfg.loops * cfg.loopLen){
+        playhead.push({t:nextStepTime, done:true});
         clearInterval(scheduler); scheduler = null;
         return;
       }
-      var p = beatCounter % cfg.loopLen;
-      var loopNo = Math.floor(beatCounter / cfg.loopLen);
-      var ki = Math.floor(p / cfg.bpk);
-      var bik = p % cfg.bpk;
-      clickAt(nextBeatTime, bik===0);
-      if(bik===0) scheduleKey(ki, nextBeatTime, spb);
-      playhead.push({t:nextBeatTime, ki:ki, loopNo:loopNo, bik:bik});
-      beatCounter++;
-      nextBeatTime += spb;
+      var p = stepCounter % cfg.loopLen;
+      var loopNo = Math.floor(stepCounter / cfg.loopLen);
+      var ki = Math.floor(p / cfg.stepsPerKey);
+      var sik = p % cfg.stepsPerKey;          // eighth-note index within the key
+      var onBeat = (sik % 2) === 0;
+
+      if(onBeat) clickAt(nextStepTime, sik === 0);
+
+      if(cfg.mode === "drone"){
+        if(sik === 0) playNote(mtof(48 + KEYS[ki].pc), nextStepTime, cfg.bpk * spb, true);
+      }else if(sik < pattern.length){
+        playNote(mtof(48 + KEYS[ki].pc + pattern[sik]), nextStepTime, sEighth * 0.9, false);
+      }
+
+      if(onBeat) playhead.push({t:nextStepTime, ki:ki, loopNo:loopNo, bik:sik/2});
+      stepCounter++;
+      nextStepTime += sEighth;
     }
   }
 
+  var shownKey = -1;
   function renderLoop(){
     if(ctx){
       var now = ctx.currentTime;
@@ -620,6 +646,7 @@
         setActive(ev.ki);
         paintBeat(ev.bik);
         dcSub.textContent = "Lap " + (ev.loopNo+1) + " / " + cfg.loops;
+        if(ev.ki !== shownKey){ showPattern(cfg.mode, ev.ki); shownKey = ev.ki; }
       }
     }
     if(playing) rafId = requestAnimationFrame(renderLoop);
@@ -639,9 +666,11 @@
   }
 
   function resetIdle(){
+    shownKey = -1;
     setActive(0);
     dcSub.textContent = MODE_LABEL[currentMode()];
     buildBeatDots(beatsPerKey(currentMode()));
+    showPattern(currentMode(), 0);
   }
 
   function start(){
@@ -649,14 +678,18 @@
     if(ctx.state === "suspended") ctx.resume();
     completeEl.classList.remove("show");
     var mode = currentMode();
-    cfg = { mode:mode, bpk:beatsPerKey(mode), loops:loops, loopLen:12*beatsPerKey(mode) };
-    beatCounter = 0;
-    nextBeatTime = ctx.currentTime + 0.18;
+    var bpk = beatsPerKey(mode);
+    // lengths are measured in eighth-note steps (2 per beat)
+    cfg = { mode:mode, bpk:bpk, stepsPerKey:bpk*2, loopLen:12*bpk*2, loops:loops };
+    stepCounter = 0;
+    nextStepTime = ctx.currentTime + 0.15;
     playhead = [];
+    shownKey = -1;
     playing = true;
     buildBeatDots(cfg.bpk);
     setPlayUI(true);
     setActive(0);
+    showPattern(mode, 0);
     schedule();
     scheduler = setInterval(schedule, 25);
     rafId = requestAnimationFrame(renderLoop);
