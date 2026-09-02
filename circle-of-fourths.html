@@ -1,0 +1,759 @@
+<title>Circle of Fourths Practice</title>
+<meta name="description" content="A looping circle-of-fourths practice trainer for bass guitar, with metronome, tempo and volume, and drone / major / minor modes.">
+<style>
+  :root{
+    --ground:#F2ECDE;
+    --panel:#FBF7EE;
+    --panel-2:#EDE6D6;
+    --ink:#211C14;
+    --ink-soft:#6A6152;
+    --ink-faint:#948B79;
+    --line:#DBD1BC;
+    --amber:#A85A24;
+    --amber-lit:#C67B3A;
+    --amber-glow:rgba(198,123,58,.16);
+    --sage:#5E7A54;
+    --shadow:24px 28px 60px -28px rgba(58,42,18,.35);
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --ground:#141109;
+      --panel:#1D1811;
+      --panel-2:#262017;
+      --ink:#F0E6D2;
+      --ink-soft:#A0947F;
+      --ink-faint:#6F6552;
+      --line:#332B1F;
+      --amber:#D2843F;
+      --amber-lit:#E7A65E;
+      --amber-glow:rgba(231,166,94,.14);
+      --sage:#8BA87F;
+      --shadow:none;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#141109;
+    --panel:#1D1811;
+    --panel-2:#262017;
+    --ink:#F0E6D2;
+    --ink-soft:#A0947F;
+    --ink-faint:#6F6552;
+    --line:#332B1F;
+    --amber:#D2843F;
+    --amber-lit:#E7A65E;
+    --amber-glow:rgba(231,166,94,.14);
+    --sage:#8BA87F;
+    --shadow:none;
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--ground);
+    color:var(--ink);
+    font-family:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+    font-size:15px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:988px;margin:0 auto;padding:26px 22px 60px}
+
+  /* ---- header ---- */
+  header.top{
+    display:flex;align-items:baseline;justify-content:space-between;
+    gap:18px;flex-wrap:wrap;
+    border-bottom:1px solid var(--line);
+    padding-bottom:16px;margin-bottom:26px;
+  }
+  .brand{display:flex;align-items:baseline;gap:12px}
+  .lamp{
+    width:9px;height:9px;border-radius:50%;
+    background:var(--amber-lit);align-self:center;
+    box-shadow:0 0 0 3px var(--amber-glow);flex:none;
+  }
+  .wordmark{
+    font-family:"Fraunces","Georgia",serif;
+    font-weight:900;font-size:25px;letter-spacing:-.01em;
+  }
+  .wordmark b{font-weight:900;color:var(--amber)}
+  .tagline{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink-faint);
+  }
+  .theme-btn{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:12px;letter-spacing:.08em;
+    background:transparent;color:var(--ink-soft);
+    border:1px solid var(--line);border-radius:999px;
+    padding:5px 12px;cursor:pointer;
+  }
+  .theme-btn:hover{color:var(--ink);border-color:var(--ink-faint)}
+
+  .lede{
+    max-width:60ch;color:var(--ink-soft);margin:0 0 24px;
+  }
+  .lede strong{color:var(--ink);font-weight:600}
+
+  /* ---- console ---- */
+  .console{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:16px;
+    box-shadow:var(--shadow);
+    padding:22px;
+    display:grid;
+    grid-template-columns:minmax(0,340px) 1fr;
+    gap:26px;
+  }
+  @media (max-width:760px){
+    .console{grid-template-columns:1fr;gap:22px;padding:18px}
+  }
+
+  /* ---- dial ---- */
+  .dial-wrap{display:flex;flex-direction:column;gap:14px;align-items:center}
+  .dial{position:relative;width:100%;max-width:320px}
+  .dial svg{display:block;width:100%;height:auto;overflow:visible}
+  #ring text{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:15px;font-weight:500;
+    fill:var(--ink-soft);
+    text-anchor:middle;dominant-baseline:central;
+    transition:fill .25s ease;
+  }
+  #ring text.on{fill:var(--ground);font-weight:600}
+  .ring-track{fill:none;stroke:var(--line);stroke-width:1.5}
+  #hl{
+    fill:var(--amber-lit);
+    transition:cx .38s cubic-bezier(.4,0,.2,1),cy .38s cubic-bezier(.4,0,.2,1),opacity .3s;
+  }
+  .dial.idle #hl{opacity:.32}
+  #pointer{
+    fill:var(--amber);
+    transform-box:fill-box;transform-origin:center;
+    transition:rotate .38s cubic-bezier(.4,0,.2,1);
+  }
+  .dial.idle #pointer{opacity:.4}
+  .dial.playing .ring-outer{animation:breathe 2.4s ease-in-out infinite}
+  @keyframes breathe{
+    0%,100%{stroke:var(--line)}
+    50%{stroke:var(--amber-lit)}
+  }
+  .dial-center{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;pointer-events:none;text-align:center;
+  }
+  .dc-key{
+    font-family:"Fraunces","Georgia",serif;font-weight:900;
+    font-size:46px;line-height:1;letter-spacing:-.02em;
+  }
+  .dc-sub{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--ink-faint);margin-top:8px;
+  }
+  .beats{display:flex;gap:8px;align-items:center;height:14px}
+  .beats span{
+    width:9px;height:9px;border-radius:50%;
+    border:1.5px solid var(--ink-faint);background:transparent;
+    transition:background .08s linear,border-color .08s linear,transform .08s linear;
+  }
+  .beats span.accent{width:11px;height:11px}
+  .beats span.hit{background:var(--amber-lit);border-color:var(--amber-lit);transform:scale(1.08)}
+
+  /* ---- controls ---- */
+  .controls{display:flex;flex-direction:column;gap:20px;min-width:0}
+  .grp{display:flex;flex-direction:column;gap:9px}
+  .grp-label{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--ink-faint);
+  }
+
+  .segmented{
+    display:flex;border:1px solid var(--line);border-radius:10px;
+    overflow:hidden;background:var(--panel-2);
+  }
+  .segmented .seg{flex:1}
+  .segmented input{position:absolute;opacity:0;pointer-events:none}
+  .segmented label{
+    display:block;text-align:center;padding:9px 6px;cursor:pointer;
+    font-size:13px;color:var(--ink-soft);
+    border-right:1px solid var(--line);
+    transition:background .15s,color .15s;
+  }
+  .segmented .seg:last-child label{border-right:none}
+  .segmented input:checked+label{background:var(--amber);color:#fff;font-weight:600}
+  .segmented input:focus-visible+label{outline:2px solid var(--amber-lit);outline-offset:-3px}
+  .console.locked .segmented label{cursor:not-allowed;opacity:.55}
+
+  .slider-row{display:flex;align-items:center;gap:14px}
+  input[type=range]{
+    flex:1;min-width:0;accent-color:var(--amber-lit);height:22px;cursor:pointer;
+  }
+  .readout{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-variant-numeric:tabular-nums;
+    font-size:16px;font-weight:500;min-width:78px;text-align:right;
+  }
+  .readout small{font-size:11px;color:var(--ink-faint);letter-spacing:.06em}
+
+  .stepper{display:flex;align-items:center;gap:0;width:fit-content}
+  .stepper button{
+    width:38px;height:38px;font-size:19px;line-height:1;
+    background:var(--panel-2);color:var(--ink);
+    border:1px solid var(--line);cursor:pointer;
+  }
+  .stepper button:first-child{border-radius:9px 0 0 9px}
+  .stepper button:last-child{border-radius:0 9px 9px 0}
+  .stepper button:hover{border-color:var(--ink-faint)}
+  .stepper button:disabled{opacity:.4;cursor:not-allowed}
+  .stepper .val{
+    width:56px;height:38px;display:flex;align-items:center;justify-content:center;
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+    font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:16px;
+    font-variant-numeric:tabular-nums;background:var(--panel);
+  }
+  .estimate{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:12.5px;color:var(--ink-soft);
+  }
+  .estimate b{color:var(--sage);font-weight:600}
+
+  .play{
+    margin-top:2px;
+    width:100%;padding:15px;border:none;border-radius:11px;cursor:pointer;
+    background:var(--amber);color:#fff;
+    font-family:"Fraunces","Georgia",serif;font-weight:900;
+    font-size:18px;letter-spacing:.01em;
+    display:flex;align-items:center;justify-content:center;gap:10px;
+    transition:background .15s,transform .06s;
+  }
+  .play:hover{background:var(--amber-lit)}
+  .play:active{transform:translateY(1px)}
+  .play:focus-visible{outline:3px solid var(--amber-lit);outline-offset:3px}
+  .play.playing{background:var(--panel-2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+  .play .glyph{font-family:"IBM Plex Sans",sans-serif;font-size:14px}
+  .complete{
+    text-align:center;font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--sage);
+    height:0;overflow:hidden;transition:height .2s;
+  }
+  .complete.show{height:18px}
+
+  /* ---- reference ---- */
+  .ref{margin-top:26px;display:flex;flex-direction:column;gap:16px}
+  .ref h2{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--ink-faint);margin:0;font-weight:500;
+  }
+  .cycle{display:flex;flex-wrap:wrap;gap:7px}
+  .chip{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:13px;padding:5px 10px;border-radius:7px;
+    background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);
+    transition:background .2s,color .2s,border-color .2s;
+  }
+  .chip.on{background:var(--amber);color:#fff;border-color:var(--amber)}
+  .chip .step{color:var(--ink-faint);font-size:10px;margin-right:5px}
+  .chip.on .step{color:rgba(255,255,255,.7)}
+  .pattern-line{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:13px 15px;font-size:13.5px;color:var(--ink-soft);
+    overflow-x:auto;
+  }
+  .pattern-line .lbl{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;
+    color:var(--ink-faint);display:block;margin-bottom:5px;
+  }
+  .pattern-line .notes{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;color:var(--ink);
+    white-space:nowrap;letter-spacing:.04em;
+  }
+  footer{
+    margin-top:34px;font-size:12px;color:var(--ink-faint);
+    border-top:1px solid var(--line);padding-top:14px;max-width:62ch;
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    #pointer,#hl,.chip,.beats span{transition:none}
+    .dial.playing .ring-outer{animation:none}
+  }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <span class="lamp" aria-hidden="true"></span>
+      <span class="wordmark">Bass<b>Tools</b></span>
+      <span class="tagline">Practice rig for the low end</span>
+    </div>
+    <button class="theme-btn" id="themeBtn" type="button">Theme</button>
+  </header>
+
+  <p class="lede">
+    <strong>Circle of Fourths Practice.</strong> Loop through all twelve keys the way
+    walking lines and jazz heads move — <em>C, F, B&flat;, E&flat;, A&flat;, D&flat;, G&flat;, B, E, A, D, G</em> —
+    with a click running underneath. Pick a mode, set tempo and volume, choose how many times
+    around, and hit play. Headphones or an amp recommended; the tones sit low.
+  </p>
+
+  <div class="console" id="console">
+    <div class="dial-wrap">
+      <div class="dial idle" id="dial">
+        <svg viewBox="0 0 340 340" role="img" aria-label="Circle of fourths dial">
+          <circle class="ring-track ring-outer" cx="170" cy="170" r="150"></circle>
+          <circle class="ring-track" cx="170" cy="170" r="150"></circle>
+          <circle id="hl" cx="170" cy="40" r="19"></circle>
+          <g id="ring"></g>
+          <path id="pointer" d="M170 78 L177 128 L163 128 Z"></path>
+        </svg>
+        <div class="dial-center">
+          <div class="dc-key" id="dcKey">C</div>
+          <div class="dc-sub" id="dcSub">Major scale</div>
+        </div>
+      </div>
+      <div class="beats" id="beats" aria-hidden="true"></div>
+    </div>
+
+    <div class="controls">
+      <div class="grp">
+        <span class="grp-label">Mode</span>
+        <div class="segmented" id="modeSeg">
+          <span class="seg"><input type="radio" name="mode" id="m-drone" value="drone"><label for="m-drone">Drone</label></span>
+          <span class="seg"><input type="radio" name="mode" id="m-major" value="major" checked><label for="m-major">Major scale</label></span>
+          <span class="seg"><input type="radio" name="mode" id="m-minor" value="minor"><label for="m-minor">Minor scale</label></span>
+        </div>
+      </div>
+
+      <div class="grp">
+        <span class="grp-label">Tempo</span>
+        <div class="slider-row">
+          <input type="range" id="bpm" min="40" max="200" step="1" value="92" aria-label="Beats per minute">
+          <span class="readout"><span id="bpmVal">92</span> <small>BPM</small></span>
+        </div>
+      </div>
+
+      <div class="grp">
+        <span class="grp-label">Volume</span>
+        <div class="slider-row">
+          <input type="range" id="vol" min="0" max="100" step="1" value="68" aria-label="Volume">
+          <span class="readout"><span id="volVal">68</span></span>
+        </div>
+      </div>
+
+      <div class="grp">
+        <span class="grp-label">Times around the circle</span>
+        <div class="slider-row">
+          <div class="stepper">
+            <button type="button" id="loopMinus" aria-label="Fewer loops">&minus;</button>
+            <span class="val" id="loopVal">4</span>
+            <button type="button" id="loopPlus" aria-label="More loops">+</button>
+          </div>
+          <span class="estimate" id="estimate"></span>
+        </div>
+      </div>
+
+      <button class="play" id="play" type="button" aria-pressed="false">
+        <span class="glyph" aria-hidden="true">&#9654;</span><span id="playLabel">Play</span>
+      </button>
+      <div class="complete" id="complete">Session complete</div>
+    </div>
+  </div>
+
+  <section class="ref">
+    <h2>The cycle</h2>
+    <div class="cycle" id="cycle"></div>
+    <div class="pattern-line">
+      <span class="lbl" id="patLbl">Pattern per key — shown in C</span>
+      <span class="notes" id="patNotes"></span>
+    </div>
+  </section>
+
+  <footer>
+    Each pass plays every key in fourths. Drone holds the tonic for a bar; the scale modes
+    run one octave up and back down in eighth notes — fifteen notes over two bars — then move on.
+    Nothing is recorded or sent anywhere; the sound is generated live in your browser.
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var KEYS = [
+    {n:"C",pc:0},{n:"F",pc:5},{n:"B♭",pc:10},{n:"E♭",pc:3},
+    {n:"A♭",pc:8},{n:"D♭",pc:1},{n:"G♭",pc:6},{n:"B",pc:11},
+    {n:"E",pc:4},{n:"A",pc:9},{n:"D",pc:2},{n:"G",pc:7}
+  ];
+  var MAJOR = [0,2,4,5,7,9,11,12];
+  var MINOR = [0,2,3,5,7,8,10,12];
+  var FLATNAMES = ["C","D♭","D","E♭","E","F","G♭","G","A♭","A","B♭","B"];
+  var MODE_LABEL = {drone:"Drone",major:"Major scale",minor:"Minor scale"};
+  var CENTER = 170, RING_R = 150;
+
+  // ---- persistence ----
+  function store(k,v){ try{ localStorage.setItem("basstools-"+k, v); }catch(e){} }
+  function recall(k){ try{ return localStorage.getItem("basstools-"+k); }catch(e){ return null; } }
+
+  // ---- elements ----
+  var $ = function(id){ return document.getElementById(id); };
+  var dial=$("dial"), ringG=$("ring"), hl=$("hl"), pointer=$("pointer");
+  var dcKey=$("dcKey"), dcSub=$("dcSub"), beatsEl=$("beats");
+  var bpmEl=$("bpm"), volEl=$("vol"), bpmVal=$("bpmVal"), volVal=$("volVal");
+  var loopValEl=$("loopVal"), loopMinus=$("loopMinus"), loopPlus=$("loopPlus");
+  var estimateEl=$("estimate"), playBtn=$("play"), playLabel=$("playLabel");
+  var completeEl=$("complete"), consoleEl=$("console"), cycleEl=$("cycle");
+  var patLbl=$("patLbl"), patNotes=$("patNotes"), themeBtn=$("themeBtn");
+
+  var loops = 4;
+
+  // ---- build dial labels + positions ----
+  var pos = [];
+  KEYS.forEach(function(k,i){
+    var ang = (-90 + i*30) * Math.PI/180;
+    var x = CENTER + RING_R*Math.cos(ang);
+    var y = CENTER + RING_R*Math.sin(ang);
+    pos.push({x:x,y:y});
+    var t = document.createElementNS("http://www.w3.org/2000/svg","text");
+    t.setAttribute("x",x.toFixed(1));
+    t.setAttribute("y",y.toFixed(1));
+    t.setAttribute("data-i",i);
+    t.textContent = k.n;
+    ringG.appendChild(t);
+  });
+  var ringTexts = ringG.querySelectorAll("text");
+
+  // ---- build cycle chips ----
+  KEYS.forEach(function(k,i){
+    var c = document.createElement("span");
+    c.className = "chip";
+    c.setAttribute("data-i", i);
+    c.innerHTML = '<span class="step">'+(i+1)+'</span>'+k.n;
+    cycleEl.appendChild(c);
+  });
+  var chips = cycleEl.querySelectorAll(".chip");
+
+  // ---- dial paint helpers ----
+  function setActive(i){
+    hl.setAttribute("cx", pos[i].x.toFixed(1));
+    hl.setAttribute("cy", pos[i].y.toFixed(1));
+    pointer.style.rotate = (i*30) + "deg";
+    for(var j=0;j<ringTexts.length;j++){
+      ringTexts[j].classList.toggle("on", j===i);
+    }
+    for(var c=0;c<chips.length;c++){
+      chips[c].classList.toggle("on", c===i);
+    }
+    dcKey.textContent = KEYS[i].n;
+  }
+  function buildBeatDots(n){
+    beatsEl.innerHTML = "";
+    for(var i=0;i<n;i++){
+      var s = document.createElement("span");
+      if(i===0) s.className = "accent";
+      beatsEl.appendChild(s);
+    }
+  }
+  function paintBeat(bik){
+    var d = beatsEl.children;
+    for(var i=0;i<d.length;i++) d[i].classList.toggle("hit", i===bik);
+  }
+
+  // ---- note name pattern (reference, in C) ----
+  function patternNames(mode){
+    if(mode==="drone") return "C  (held for one bar)";
+    var iv = mode==="major" ? MAJOR : MINOR;
+    var full = iv.concat(iv.slice(0,7).reverse());
+    return full.map(function(st){ return FLATNAMES[st%12]; }).join(" ");
+  }
+
+  // ---- estimate ----
+  function fmtTime(s){
+    s = Math.round(s);
+    var m = Math.floor(s/60);
+    var r = s%60;
+    return m + ":" + (r<10?"0":"") + r;
+  }
+  function currentMode(){
+    return document.querySelector('input[name="mode"]:checked').value;
+  }
+  function beatsPerKey(mode){ return mode==="drone" ? 4 : 8; }
+  function refresh(){
+    var mode = currentMode();
+    var bpm = +bpmEl.value;
+    var bpk = beatsPerKey(mode);
+    var perLoop = 12 * bpk * 60 / bpm;
+    var total = perLoop * loops;
+    estimateEl.innerHTML = "&approx; <b>" + fmtTime(total) + "</b> total &middot; " +
+      fmtTime(perLoop) + " per lap";
+    bpmVal.textContent = bpm;
+    volVal.textContent = volEl.value;
+    loopValEl.textContent = loops;
+    loopMinus.disabled = loops<=1;
+    loopPlus.disabled = loops>=24;
+    patLbl.textContent = "Pattern per key — shown in C · " + MODE_LABEL[mode];
+    patNotes.textContent = patternNames(mode);
+    if(!playing){
+      dcSub.textContent = MODE_LABEL[mode];
+      buildBeatDots(bpk);
+    }
+  }
+
+  // ================= AUDIO =================
+  var ctx=null, master=null, lp=null, noteBus=null, metroBus=null;
+  var playing=false, scheduler=null, rafId=null;
+  var beatCounter=0, nextBeatTime=0;
+  var cfg={};
+  var playhead=[];
+  var live=[];  // active source nodes for hard-stop
+
+  function ensureAudio(){
+    if(ctx) return;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    ctx = new AC();
+    master = ctx.createGain();
+    lp = ctx.createBiquadFilter();
+    lp.type = "lowpass"; lp.frequency.value = 1600; lp.Q.value = 0.5;
+    noteBus = ctx.createGain(); noteBus.gain.value = 1;
+    metroBus = ctx.createGain(); metroBus.gain.value = 0.5;
+    noteBus.connect(lp); lp.connect(master);
+    metroBus.connect(master);
+    master.connect(ctx.destination);
+    applyVolume();
+  }
+  function applyVolume(){
+    if(!master) return;
+    var v = (+volEl.value)/100;
+    master.gain.setTargetAtTime(v*v*0.8, ctx.currentTime, 0.03);
+  }
+  function mtof(m){ return 440 * Math.pow(2,(m-69)/12); }
+
+  function playNote(freq, t, dur, sustain){
+    var o1 = ctx.createOscillator(); o1.type = "triangle"; o1.frequency.value = freq;
+    var o2 = ctx.createOscillator(); o2.type = "sine"; o2.frequency.value = freq/2;
+    var sub = ctx.createGain(); sub.gain.value = 0.45;
+    var g = ctx.createGain();
+    o1.connect(g); o2.connect(sub); sub.connect(g); g.connect(noteBus);
+
+    var peak = 0.26;
+    var atk = Math.min(0.02, dur*0.25);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t+atk);
+    if(sustain){
+      g.gain.linearRampToValueAtTime(peak*0.82, t + dur*0.7);
+    }else{
+      g.gain.exponentialRampToValueAtTime(peak*0.5, t + atk + Math.min(0.1, dur*0.5));
+    }
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    o1.start(t); o2.start(t);
+    var end = t + dur + 0.05;
+    o1.stop(end); o2.stop(end);
+    live.push(o1, o2);
+    o1.onended = function(){
+      var k = live.indexOf(o1); if(k>-1) live.splice(k,1);
+      k = live.indexOf(o2); if(k>-1) live.splice(k,1);
+    };
+  }
+
+  function clickAt(t, accent){
+    var o = ctx.createOscillator(); o.type = "sine";
+    o.frequency.setValueAtTime(accent?1500:1050, t);
+    o.frequency.exponentialRampToValueAtTime(accent?620:520, t+0.03);
+    var g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(accent?0.5:0.3, t+0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+0.06);
+    o.connect(g); g.connect(metroBus);
+    o.start(t); o.stop(t+0.08);
+    live.push(o);
+    o.onended = function(){ var k=live.indexOf(o); if(k>-1) live.splice(k,1); };
+  }
+
+  function scheduleKey(ki, T, spb){
+    var tonic = 48 + KEYS[ki].pc;
+    if(cfg.mode==="drone"){
+      playNote(mtof(tonic), T, cfg.bpk*spb, true);
+    }else{
+      var iv = cfg.mode==="major" ? MAJOR : MINOR;
+      var full = iv.concat(iv.slice(0,7).reverse());
+      for(var n=0;n<full.length;n++){
+        playNote(mtof(tonic+full[n]), T + n*0.5*spb, 0.46*spb, false);
+      }
+    }
+  }
+
+  function schedule(){
+    if(!playing || !ctx) return;
+    var spb = 60 / (+bpmEl.value);
+    while(nextBeatTime < ctx.currentTime + 0.2){
+      if(beatCounter >= cfg.loops * cfg.loopLen){
+        playhead.push({t:nextBeatTime, done:true});
+        clearInterval(scheduler); scheduler = null;
+        return;
+      }
+      var p = beatCounter % cfg.loopLen;
+      var loopNo = Math.floor(beatCounter / cfg.loopLen);
+      var ki = Math.floor(p / cfg.bpk);
+      var bik = p % cfg.bpk;
+      clickAt(nextBeatTime, bik===0);
+      if(bik===0) scheduleKey(ki, nextBeatTime, spb);
+      playhead.push({t:nextBeatTime, ki:ki, loopNo:loopNo, bik:bik});
+      beatCounter++;
+      nextBeatTime += spb;
+    }
+  }
+
+  function renderLoop(){
+    if(ctx){
+      var now = ctx.currentTime;
+      while(playhead.length && playhead[0].t <= now + 0.001){
+        var ev = playhead.shift();
+        if(ev.done){ finish(); return; }
+        setActive(ev.ki);
+        paintBeat(ev.bik);
+        dcSub.textContent = "Lap " + (ev.loopNo+1) + " / " + cfg.loops;
+      }
+    }
+    if(playing) rafId = requestAnimationFrame(renderLoop);
+  }
+
+  function setPlayUI(on){
+    playBtn.classList.toggle("playing", on);
+    playBtn.setAttribute("aria-pressed", on ? "true" : "false");
+    playLabel.textContent = on ? "Stop" : "Play";
+    playBtn.querySelector(".glyph").innerHTML = on ? "&#9632;" : "&#9654;";
+    consoleEl.classList.toggle("locked", on);
+    dial.classList.toggle("playing", on);
+    dial.classList.toggle("idle", !on);
+    document.querySelectorAll('input[name="mode"]').forEach(function(r){ r.disabled = on; });
+    loopMinus.disabled = on || loops<=1;
+    loopPlus.disabled = on || loops>=24;
+  }
+
+  function resetIdle(){
+    setActive(0);
+    dcSub.textContent = MODE_LABEL[currentMode()];
+    buildBeatDots(beatsPerKey(currentMode()));
+  }
+
+  function start(){
+    ensureAudio();
+    if(ctx.state === "suspended") ctx.resume();
+    completeEl.classList.remove("show");
+    var mode = currentMode();
+    cfg = { mode:mode, bpk:beatsPerKey(mode), loops:loops, loopLen:12*beatsPerKey(mode) };
+    beatCounter = 0;
+    nextBeatTime = ctx.currentTime + 0.18;
+    playhead = [];
+    playing = true;
+    buildBeatDots(cfg.bpk);
+    setPlayUI(true);
+    setActive(0);
+    schedule();
+    scheduler = setInterval(schedule, 25);
+    rafId = requestAnimationFrame(renderLoop);
+  }
+
+  function hardStopNodes(){
+    live.slice().forEach(function(n){ try{ n.stop(); }catch(e){} });
+    live.length = 0;
+  }
+
+  function stop(){
+    playing = false;
+    if(scheduler){ clearInterval(scheduler); scheduler = null; }
+    if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
+    playhead = [];
+    if(ctx){
+      master.gain.cancelScheduledValues(ctx.currentTime);
+      master.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.015);
+      hardStopNodes();
+      setTimeout(applyVolume, 140);
+    }
+    setPlayUI(false);
+    resetIdle();
+  }
+
+  function finish(){
+    playing = false;
+    if(scheduler){ clearInterval(scheduler); scheduler = null; }
+    if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
+    playhead = [];
+    setPlayUI(false);
+    resetIdle();
+    completeEl.classList.add("show");
+    setTimeout(function(){ completeEl.classList.remove("show"); }, 4000);
+  }
+
+  // ---- events ----
+  playBtn.addEventListener("click", function(){
+    if(playing) stop(); else start();
+  });
+
+  document.querySelectorAll('input[name="mode"]').forEach(function(r){
+    r.addEventListener("change", function(){
+      store("mode", currentMode());
+      refresh();
+    });
+  });
+
+  bpmEl.addEventListener("input", function(){ store("bpm", bpmEl.value); refresh(); });
+  volEl.addEventListener("input", function(){ store("vol", volEl.value); volVal.textContent = volEl.value; applyVolume(); });
+
+  loopMinus.addEventListener("click", function(){
+    if(playing) return;
+    loops = Math.max(1, loops-1); store("loops", loops); refresh();
+  });
+  loopPlus.addEventListener("click", function(){
+    if(playing) return;
+    loops = Math.min(24, loops+1); store("loops", loops); refresh();
+  });
+
+  document.addEventListener("keydown", function(e){
+    if(e.code === "Space"){
+      var tag = (e.target.tagName || "").toLowerCase();
+      if(tag === "input" || tag === "button" || tag === "textarea") return;
+      e.preventDefault();
+      if(playing) stop(); else start();
+    }
+  });
+
+  // ---- theme ----
+  function applyTheme(t){
+    if(t === "light" || t === "dark"){
+      document.documentElement.setAttribute("data-theme", t);
+    }else{
+      document.documentElement.removeAttribute("data-theme");
+    }
+  }
+  themeBtn.addEventListener("click", function(){
+    var cur = document.documentElement.getAttribute("data-theme");
+    var next = cur === "dark" ? "light" : "dark";
+    applyTheme(next); store("theme", next);
+  });
+
+  // ---- restore ----
+  (function restore(){
+    var t = recall("theme"); if(t) applyTheme(t);
+    var b = recall("bpm"); if(b && +b>=40 && +b<=200) bpmEl.value = b;
+    var v = recall("vol"); if(v!==null && +v>=0 && +v<=100) volEl.value = v;
+    var l = recall("loops"); if(l && +l>=1 && +l<=24) loops = +l;
+    var m = recall("mode");
+    if(m && MODE_LABEL[m]){
+      var el = document.querySelector('input[name="mode"][value="'+m+'"]');
+      if(el) el.checked = true;
+    }
+  })();
+
+  setActive(0);
+  refresh();
+})();
+</script>
