@@ -1,6 +1,6 @@
 <meta charset="utf-8">
 <title>Circle of Fourths Practice</title>
-<meta name="description" content="A looping circle-of-fourths practice trainer for bass guitar, with metronome, tempo and volume, and drone / major / minor modes.">
+<meta name="description" content="A looping circle-of-fourths practice trainer for bass guitar, with metronome, tempo and volume, and drone / major / minor / dominant modes.">
 <style>
   :root{
     --ground:#F2ECDE;
@@ -48,6 +48,7 @@
   }
 
   *{box-sizing:border-box}
+  [hidden]{display:none!important}
   html{-webkit-text-size-adjust:100%}
   body{
     margin:0;
@@ -58,7 +59,7 @@
     line-height:1.55;
     -webkit-font-smoothing:antialiased;
   }
-  .wrap{max-width:988px;margin:0 auto;padding:26px 22px 60px}
+  .wrap{max-width:1060px;margin:0 auto;padding:26px 22px 60px}
 
   /* ---- header ---- */
   header.top{
@@ -105,7 +106,7 @@
     box-shadow:var(--shadow);
     padding:22px;
     display:grid;
-    grid-template-columns:minmax(0,340px) 1fr;
+    grid-template-columns:minmax(0,320px) 1fr;
     gap:26px;
   }
   @media (max-width:760px){
@@ -179,8 +180,8 @@
   .segmented .seg{flex:1}
   .segmented input{position:absolute;opacity:0;pointer-events:none}
   .segmented label{
-    display:block;text-align:center;padding:9px 6px;cursor:pointer;
-    font-size:13px;color:var(--ink-soft);
+    display:block;text-align:center;padding:9px 4px;cursor:pointer;
+    font-size:12.5px;white-space:nowrap;color:var(--ink-soft);
     border-right:1px solid var(--line);
     transition:background .15s,color .15s;
   }
@@ -188,6 +189,20 @@
   .segmented input:checked+label{background:var(--amber);color:#fff;font-weight:600}
   .segmented input:focus-visible+label{outline:2px solid var(--amber-lit);outline-offset:-3px}
   .console.locked .segmented label{cursor:not-allowed;opacity:.55}
+
+  .choice-row{display:flex;flex-wrap:wrap;gap:7px}
+  .choice-row input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+  .choice-row label{
+    display:block;padding:7px 12px;border-radius:999px;cursor:pointer;
+    white-space:nowrap;font-size:12.5px;color:var(--ink-soft);
+    border:1px solid var(--line);background:var(--panel-2);
+    transition:background .15s,color .15s,border-color .15s;
+  }
+  .choice-row label:hover{border-color:var(--ink-faint);color:var(--ink)}
+  .choice-row input:checked+label{background:var(--amber);color:#fff;border-color:var(--amber);font-weight:500}
+  .choice-row input:focus-visible+label{outline:2px solid var(--amber-lit);outline-offset:2px}
+  .console.locked .choice-row label{cursor:not-allowed;opacity:.55}
+  .console.locked .choice-row label:hover{border-color:var(--line);color:var(--ink-soft)}
 
   .slider-row{display:flex;align-items:center;gap:14px}
   input[type=range]{
@@ -326,10 +341,31 @@
     <div class="controls">
       <div class="grp">
         <span class="grp-label">Mode</span>
-        <div class="segmented" id="modeSeg">
-          <span class="seg"><input type="radio" name="mode" id="m-drone" value="drone"><label for="m-drone">Drone</label></span>
-          <span class="seg"><input type="radio" name="mode" id="m-major" value="major" checked><label for="m-major">Major scale</label></span>
-          <span class="seg"><input type="radio" name="mode" id="m-minor" value="minor"><label for="m-minor">Minor scale</label></span>
+        <div class="segmented" id="catSeg">
+          <span class="seg"><input type="radio" name="cat" id="c-drone" value="drone"><label for="c-drone">Drone</label></span>
+          <span class="seg"><input type="radio" name="cat" id="c-scale" value="scale" checked><label for="c-scale">Scale</label></span>
+          <span class="seg"><input type="radio" name="cat" id="c-mode" value="mode"><label for="c-mode">Mode</label></span>
+          <span class="seg"><input type="radio" name="cat" id="c-arp" value="arp"><label for="c-arp">Arpeggio</label></span>
+        </div>
+        <div class="choice-row" id="scaleRow">
+          <input type="radio" name="scale" id="s-major" value="major" checked><label for="s-major">Major</label>
+          <input type="radio" name="scale" id="s-minor" value="minor"><label for="s-minor">Minor</label>
+          <input type="radio" name="scale" id="s-dominant" value="dominant"><label for="s-dominant">Dominant</label>
+        </div>
+        <div class="choice-row" id="modalRow" hidden>
+          <input type="radio" name="modal" id="mo-ionian" value="ionian" checked><label for="mo-ionian">Ionian</label>
+          <input type="radio" name="modal" id="mo-dorian" value="dorian"><label for="mo-dorian">Dorian</label>
+          <input type="radio" name="modal" id="mo-phrygian" value="phrygian"><label for="mo-phrygian">Phrygian</label>
+          <input type="radio" name="modal" id="mo-lydian" value="lydian"><label for="mo-lydian">Lydian</label>
+          <input type="radio" name="modal" id="mo-mixolydian" value="mixolydian"><label for="mo-mixolydian">Mixolydian</label>
+          <input type="radio" name="modal" id="mo-aeolian" value="aeolian"><label for="mo-aeolian">Aeolian</label>
+          <input type="radio" name="modal" id="mo-locrian" value="locrian"><label for="mo-locrian">Locrian</label>
+        </div>
+        <div class="choice-row" id="arpRow" hidden>
+          <input type="radio" name="arp" id="a-triad" value="triad" checked><label for="a-triad">Triad</label>
+          <input type="radio" name="arp" id="a-major7" value="major7"><label for="a-major7">Major 7th</label>
+          <input type="radio" name="arp" id="a-minor7" value="minor7"><label for="a-minor7">Minor 7th</label>
+          <input type="radio" name="arp" id="a-dominant7" value="dominant7"><label for="a-dominant7">Dominant 7th</label>
         </div>
       </div>
 
@@ -378,9 +414,9 @@
   </section>
 
   <footer>
-    Each pass plays every key in fourths. Drone holds the tonic for a bar; the scale modes
-    run one octave up and back down in eighth notes &mdash; fifteen notes over two bars &mdash; then
-    move on. Nothing is recorded or sent anywhere; the sound is generated live in your browser.
+    Each pass plays every key in fourths. Drone holds the tonic for a bar; scales and modes run
+    an octave up and back down over two bars; arpeggios do the same with the chord tones, up to
+    the octave and back. Nothing is recorded or sent anywhere; the sound is generated live in your browser.
   </footer>
 </div>
 
@@ -397,18 +433,45 @@
     {n:"A"+FLAT,pc:8},{n:"D"+FLAT,pc:1},{n:"G"+FLAT,pc:6},{n:"B",pc:11},
     {n:"E",pc:4},{n:"A",pc:9},{n:"D",pc:2},{n:"G",pc:7}
   ];
-  var MAJOR = [0,2,4,5,7,9,11,12];
-  var MINOR = [0,2,3,5,7,8,10,12];
+  // Ascending semitone sets for every playable voicing (root .. octave for the
+  // scales/modes; just the chord tones for the arpeggios). Scales and the
+  // equivalent major-scale modes are listed separately on purpose.
+  var VOICINGS = {
+    major:      [0,2,4,5,7,9,11,12],
+    minor:      [0,2,3,5,7,8,10,12],
+    dominant:   [0,2,4,5,7,9,10,12],   // major with a flat 7
+    ionian:     [0,2,4,5,7,9,11,12],
+    dorian:     [0,2,3,5,7,9,10,12],
+    phrygian:   [0,1,3,5,7,8,10,12],
+    lydian:     [0,2,4,6,7,9,11,12],
+    mixolydian: [0,2,4,5,7,9,10,12],
+    aeolian:    [0,2,3,5,7,8,10,12],
+    locrian:    [0,1,3,5,6,8,10,12],
+    triad:      [0,4,7,12],            // 1 3 5 8
+    major7:     [0,4,7,11,12],         // 1 3 5 7 8
+    minor7:     [0,3,7,10,12],         // 1 b3 5 b7 8
+    dominant7:  [0,4,7,10,12]          // 1 3 5 b7 8
+  };
+  var ARP_LABEL = { triad:"Triad", major7:"Major 7th", minor7:"Minor 7th", dominant7:"Dominant 7th" };
+  // Semitones from a voicing's root down to its parent major (Ionian) key,
+  // used to decide sharp vs. flat spelling.
+  var PARENT_OFFSET = {
+    major:0, ionian:0, dorian:2, phrygian:4, lydian:5,
+    mixolydian:7, dominant:7, aeolian:9, minor:9, locrian:11,
+    triad:0, major7:0, minor7:9, dominant7:7
+  };
   var FLATNAMES = ["C","D"+FLAT,"D","E"+FLAT,"E","F","G"+FLAT,"G","A"+FLAT,"A","B"+FLAT,"B"];
   var SHARP = String.fromCharCode(0x266F); // musical sharp sign
   var SHARPNAMES = ["C","C"+SHARP,"D","D"+SHARP,"E","F","F"+SHARP,"G","G"+SHARP,"A","A"+SHARP,"B"];
-  // Which keys are written with sharps rather than flats, per mode
-  function keyUsesSharp(name, mode){
-    if(name.length !== 1) return false;                 // B/E/A/D/G/C/F only
-    return mode === "major" ? "GDAEB".indexOf(name) !== -1
-                            : (name === "E" || name === "B");
+  // Major keys conventionally written with sharps: G D A E B  (pc 7 2 9 4 11)
+  function majorKeyUsesSharp(pc){
+    var n = ((pc % 12) + 12) % 12;
+    return n===2 || n===4 || n===7 || n===9 || n===11;
   }
-  var MODE_LABEL = {drone:"Drone",major:"Major scale",minor:"Minor scale"};
+  function voiceUsesSharp(pc, id){
+    return majorKeyUsesSharp(pc - (PARENT_OFFSET[id] || 0));
+  }
+  function cap(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
   var CENTER = 170, RING_R = 150;
 
   // ---- persistence ----
@@ -424,6 +487,7 @@
   var estimateEl=$("estimate"), playBtn=$("play"), playLabel=$("playLabel");
   var completeEl=$("complete"), consoleEl=$("console"), cycleEl=$("cycle");
   var patLbl=$("patLbl"), patNotes=$("patNotes"), themeBtn=$("themeBtn");
+  var scaleRow=$("scaleRow"), modalRow=$("modalRow"), arpRow=$("arpRow");
 
   var loops = 4;
 
@@ -479,18 +543,19 @@
     for(var i=0;i<d.length;i++) d[i].classList.toggle("hit", i===bik);
   }
 
-  // ---- note name pattern (reference, in C) ----
-  function patternNames(mode, ki){
+  // ---- note-name pattern for the reference line ----
+  function patternNames(id, ki){
     var name = KEYS[ki].n;
-    if(mode === "drone") return name + "   held for one bar";
-    var names = keyUsesSharp(name, mode) ? SHARPNAMES : FLATNAMES;
+    if(id === "drone") return name + "   held for one bar";
     var pc = KEYS[ki].pc;
-    return scalePattern(mode).map(function(st){ return names[(pc + st) % 12]; }).join(" ");
+    var names = voiceUsesSharp(pc, id) ? SHARPNAMES : FLATNAMES;
+    // ascending octave only; playback still runs up and back down
+    return (VOICINGS[id] || VOICINGS.major).map(function(st){ return names[(pc + st) % 12]; }).join(" ");
   }
 
-  function showPattern(mode, ki){
-    patLbl.textContent = "Pattern per key " + MDASH + " " + KEYS[ki].n + " " + MODE_LABEL[mode].toLowerCase();
-    patNotes.textContent = patternNames(mode, ki);
+  function showPattern(sel, ki){
+    patLbl.textContent = "Pattern per key " + MDASH + " " + KEYS[ki].n + " " + sel.label.toLowerCase();
+    patNotes.textContent = patternNames(sel.id, ki);
   }
 
   // ---- estimate ----
@@ -500,14 +565,43 @@
     var r = s%60;
     return m + ":" + (r<10?"0":"") + r;
   }
-  function currentMode(){
-    return document.querySelector('input[name="mode"]:checked').value;
+  function checkedVal(name){
+    var el = document.querySelector('input[name="'+name+'"]:checked');
+    return el ? el.value : null;
   }
-  function beatsPerKey(mode){ return mode==="drone" ? 4 : 8; }
+  // The active voicing: { id, label }.  id keys into VOICINGS / PARENT_OFFSET
+  // (or "drone"); label is what the interface shows.
+  function readSelection(){
+    var cat = checkedVal("cat");
+    if(cat === "drone") return { id:"drone", label:"Drone" };
+    if(cat === "mode"){
+      var m = checkedVal("modal");
+      return { id:m, label:cap(m) };
+    }
+    if(cat === "arp"){
+      var a = checkedVal("arp");
+      return { id:a, label:ARP_LABEL[a] };
+    }
+    var s = checkedVal("scale");
+    return { id:s, label:cap(s) + " scale" };
+  }
+  function syncSecondary(){
+    var cat = checkedVal("cat");
+    scaleRow.hidden = cat !== "scale";
+    modalRow.hidden = cat !== "mode";
+    arpRow.hidden   = cat !== "arp";
+  }
+  // one bar of drone; otherwise size the key to fit its up-and-down line,
+  // rounded up to a whole bar (4 for triads, 6 for 7th arps, 8 for scales/modes)
+  function beatsPerKey(id){
+    if(id === "drone") return 4;
+    var beats = Math.ceil(scalePattern(id).length / 2);  // eighth notes -> beats
+    return beats + (beats % 2);
+  }
   function refresh(){
-    var mode = currentMode();
+    var sel = readSelection();
     var bpm = +bpmEl.value;
-    var bpk = beatsPerKey(mode);
+    var bpk = beatsPerKey(sel.id);
     var perLoop = 12 * bpk * 60 / bpm;
     var total = perLoop * loops;
     estimateEl.innerHTML = APPROX + " <b>" + fmtTime(total) + "</b> total " + MIDDOT + " " +
@@ -518,9 +612,9 @@
     loopMinus.disabled = playing || loops<=1;
     loopPlus.disabled = playing || loops>=24;
     if(!playing){
-      dcSub.textContent = MODE_LABEL[mode];
+      dcSub.textContent = sel.label;
       buildBeatDots(bpk);
-      showPattern(mode, 0);
+      showPattern(sel, 0);
     }
   }
 
@@ -595,10 +689,10 @@
     o.onended = function(){ var k=live.indexOf(o); if(k>-1) live.splice(k,1); };
   }
 
-  // 15-note ascending-then-descending scale, one octave
-  function scalePattern(mode){
-    var iv = mode === "major" ? MAJOR : MINOR;
-    return iv.concat(iv.slice(0,7).reverse());
+  // ascending line then back down, without repeating the top note
+  function scalePattern(id){
+    var iv = VOICINGS[id] || VOICINGS.major;
+    return iv.concat(iv.slice(0, iv.length - 1).reverse());
   }
 
   // The scheduler advances one eighth note at a time and only commits the
@@ -646,7 +740,7 @@
         setActive(ev.ki);
         paintBeat(ev.bik);
         dcSub.textContent = "Lap " + (ev.loopNo+1) + " / " + cfg.loops;
-        if(ev.ki !== shownKey){ showPattern(cfg.mode, ev.ki); shownKey = ev.ki; }
+        if(ev.ki !== shownKey){ showPattern(cfg.sel, ev.ki); shownKey = ev.ki; }
       }
     }
     if(playing) rafId = requestAnimationFrame(renderLoop);
@@ -660,27 +754,29 @@
     consoleEl.classList.toggle("locked", on);
     dial.classList.toggle("playing", on);
     dial.classList.toggle("idle", !on);
-    document.querySelectorAll('input[name="mode"]').forEach(function(r){ r.disabled = on; });
+    document.querySelectorAll('input[name="cat"],input[name="scale"],input[name="modal"],input[name="arp"]')
+      .forEach(function(r){ r.disabled = on; });
     loopMinus.disabled = on || loops<=1;
     loopPlus.disabled = on || loops>=24;
   }
 
   function resetIdle(){
     shownKey = -1;
+    var sel = readSelection();
     setActive(0);
-    dcSub.textContent = MODE_LABEL[currentMode()];
-    buildBeatDots(beatsPerKey(currentMode()));
-    showPattern(currentMode(), 0);
+    dcSub.textContent = sel.label;
+    buildBeatDots(beatsPerKey(sel.id));
+    showPattern(sel, 0);
   }
 
   function start(){
     ensureAudio();
     if(ctx.state === "suspended") ctx.resume();
     completeEl.classList.remove("show");
-    var mode = currentMode();
-    var bpk = beatsPerKey(mode);
+    var sel = readSelection();
+    var bpk = beatsPerKey(sel.id);
     // lengths are measured in eighth-note steps (2 per beat)
-    cfg = { mode:mode, bpk:bpk, stepsPerKey:bpk*2, loopLen:12*bpk*2, loops:loops };
+    cfg = { mode:sel.id, sel:sel, bpk:bpk, stepsPerKey:bpk*2, loopLen:12*bpk*2, loops:loops };
     stepCounter = 0;
     nextStepTime = ctx.currentTime + 0.15;
     playhead = [];
@@ -689,7 +785,7 @@
     buildBeatDots(cfg.bpk);
     setPlayUI(true);
     setActive(0);
-    showPattern(mode, 0);
+    showPattern(sel, 0);
     schedule();
     scheduler = setInterval(schedule, 25);
     rafId = requestAnimationFrame(renderLoop);
@@ -731,11 +827,19 @@
     if(playing) stop(); else start();
   });
 
-  document.querySelectorAll('input[name="mode"]').forEach(function(r){
+  document.querySelectorAll('input[name="cat"]').forEach(function(r){
     r.addEventListener("change", function(){
-      store("mode", currentMode());
-      refresh();
+      store("cat", r.value); syncSecondary(); refresh();
     });
+  });
+  document.querySelectorAll('input[name="scale"]').forEach(function(r){
+    r.addEventListener("change", function(){ store("scale", r.value); refresh(); });
+  });
+  document.querySelectorAll('input[name="modal"]').forEach(function(r){
+    r.addEventListener("change", function(){ store("modal", r.value); refresh(); });
+  });
+  document.querySelectorAll('input[name="arp"]').forEach(function(r){
+    r.addEventListener("change", function(){ store("arp", r.value); refresh(); });
   });
 
   bpmEl.addEventListener("input", function(){ store("bpm", bpmEl.value); refresh(); });
@@ -779,13 +883,25 @@
     var b = recall("bpm"); if(b && +b>=40 && +b<=200) bpmEl.value = b;
     var v = recall("vol"); if(v!==null && +v>=0 && +v<=100) volEl.value = v;
     var l = recall("loops"); if(l && +l>=1 && +l<=24) loops = +l;
-    var m = recall("mode");
-    if(m && MODE_LABEL[m]){
-      var el = document.querySelector('input[name="mode"][value="'+m+'"]');
+
+    // migrate the old single "mode" key from before Scale/Mode were split out
+    if(!recall("cat")){
+      var legacy = recall("mode");
+      if(legacy === "drone") store("cat", "drone");
+      else if(legacy === "major" || legacy === "minor" || legacy === "dominant"){
+        store("cat", "scale"); store("scale", legacy);
+      }
+    }
+    function pick(name){
+      var v = recall(name);
+      if(!v) return;
+      var el = document.querySelector('input[name="'+name+'"][value="'+v+'"]');
       if(el) el.checked = true;
     }
+    pick("cat"); pick("scale"); pick("modal"); pick("arp");
   })();
 
+  syncSecondary();
   setActive(0);
   refresh();
 })();
