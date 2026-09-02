@@ -14,6 +14,7 @@
     --amber-lit:#C67B3A;
     --amber-glow:rgba(198,123,58,.16);
     --sage:#5E7A54;
+    --sage-soft:#E7EEDD;
     --shadow:24px 28px 60px -28px rgba(58,42,18,.35);
   }
   @media (prefers-color-scheme:dark){
@@ -29,6 +30,7 @@
       --amber-lit:#E7A65E;
       --amber-glow:rgba(231,166,94,.14);
       --sage:#8BA87F;
+      --sage-soft:#26301F;
       --shadow:none;
     }
   }
@@ -44,6 +46,7 @@
     --amber-lit:#E7A65E;
     --amber-glow:rgba(231,166,94,.14);
     --sage:#8BA87F;
+    --sage-soft:#26301F;
     --shadow:none;
   }
 
@@ -190,7 +193,7 @@
   .segmented input:focus-visible+label{outline:2px solid var(--amber-lit);outline-offset:-3px}
   .console.locked .segmented label{cursor:not-allowed;opacity:.55}
 
-  .choice-row{display:flex;flex-wrap:wrap;gap:7px}
+  .choice-row{display:flex;flex-wrap:wrap;align-items:center;gap:7px}
   .choice-row input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
   .choice-row label{
     display:block;padding:7px 12px;border-radius:999px;cursor:pointer;
@@ -203,6 +206,21 @@
   .choice-row input:focus-visible+label{outline:2px solid var(--amber-lit);outline-offset:2px}
   .console.locked .choice-row label{cursor:not-allowed;opacity:.55}
   .console.locked .choice-row label:hover{border-color:var(--line);color:var(--ink-soft)}
+
+  .switch{
+    display:inline-block;margin-left:6px;padding:7px 13px;
+    border-radius:999px;border:1px solid var(--line);
+    background:var(--panel-2);color:var(--ink-soft);
+    font-size:12.5px;white-space:nowrap;cursor:pointer;user-select:none;
+    transition:background .15s,color .15s,border-color .15s;
+  }
+  .switch input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+  .switch:hover{border-color:var(--ink-faint);color:var(--ink)}
+  .switch:has(input:checked){background:var(--sage);border-color:var(--sage);color:#fff}
+  .switch:has(input:checked):hover{border-color:var(--sage);color:#fff}
+  .switch:has(input:focus-visible){outline:2px solid var(--sage);outline-offset:2px}
+  .console.locked .switch{cursor:not-allowed;opacity:.55}
+  .console.locked .switch:hover{border-color:var(--line);color:var(--ink-soft)}
 
   .slider-row{display:flex;align-items:center;gap:14px}
   input[type=range]{
@@ -366,6 +384,7 @@
           <input type="radio" name="arp" id="a-major7" value="major7"><label for="a-major7">Major 7th</label>
           <input type="radio" name="arp" id="a-minor7" value="minor7"><label for="a-minor7">Minor 7th</label>
           <input type="radio" name="arp" id="a-dominant7" value="dominant7"><label for="a-dominant7">Dominant 7th</label>
+          <label class="switch" id="invOpt"><input type="checkbox" id="inv">Include inversions</label>
         </div>
       </div>
 
@@ -416,7 +435,9 @@
   <footer>
     Each pass plays every key in fourths. Drone holds the tonic for a bar; scales and modes run
     an octave up and back down over two bars; arpeggios do the same with the chord tones, up to
-    the octave and back. Nothing is recorded or sent anywhere; the sound is generated live in your browser.
+    the octave and back. With inversions on, each arpeggio walks through every inversion &mdash; a bar
+    each &mdash; then a closing root position an octave up. Nothing is recorded or sent anywhere; the
+    sound is generated live in your browser.
   </footer>
 </div>
 
@@ -488,6 +509,7 @@
   var completeEl=$("complete"), consoleEl=$("console"), cycleEl=$("cycle");
   var patLbl=$("patLbl"), patNotes=$("patNotes"), themeBtn=$("themeBtn");
   var scaleRow=$("scaleRow"), modalRow=$("modalRow"), arpRow=$("arpRow");
+  var invEl=$("inv"), invOpt=$("invOpt");
 
   var loops = 4;
 
@@ -543,19 +565,80 @@
     for(var i=0;i<d.length;i++) d[i].classList.toggle("hit", i===bik);
   }
 
-  // ---- note-name pattern for the reference line ----
-  function patternNames(id, ki){
-    var name = KEYS[ki].n;
-    if(id === "drone") return name + "   held for one bar";
-    var pc = KEYS[ki].pc;
+  // ---- spelling + per-key playback plan ----
+  function spellNotes(semis, pc, id){
     var names = voiceUsesSharp(pc, id) ? SHARPNAMES : FLATNAMES;
-    // ascending octave only; playback still runs up and back down
-    return (VOICINGS[id] || VOICINGS.major).map(function(st){ return names[(pc + st) % 12]; }).join(" ");
+    return semis.map(function(st){ return names[(((pc + st) % 12) + 12) % 12]; }).join(" ");
+  }
+  function ordinal(k){ return k + (k===1?"st":k===2?"nd":k===3?"rd":"th"); }
+  function invName(k, N){
+    if(k === 0) return "root position";
+    if(k === N) return "root position, 8va";
+    return ordinal(k) + " inversion";
+  }
+
+  // A plan describes what one key plays: a list of bars, each an ascending set
+  // ("up", for the reference line) and the full up-and-down "seq" the scheduler
+  // walks. Scales/modes/plain arpeggios have one bar; "include inversions" makes
+  // one bar per inversion plus a closing root position an octave up.
+  function makePlan(sel){
+    var id = sel.id;
+    if(id === "drone") return finishPlan([{ up:[0], seq:[0] }], 8, id);
+
+    if(sel.inv && ARP_LABEL[id]){
+      var tones = VOICINGS[id].slice(0, -1);            // chord tones, no octave
+      var N = tones.length, ext = [], o, t, k;
+      for(o=0;o<3;o++) for(t=0;t<N;t++) ext.push(tones[t] + 12*o);
+      var bars = [];
+      for(k=0;k<=N;k++){
+        var up = ext.slice(k, k + N + 1);              // N+1 notes, next inversion
+        bars.push({ up:up, seq: up.concat(up.slice(0, up.length - 1).reverse()) });
+      }
+      return finishPlan(bars, beatsPerKey(id) * 2, id);
+    }
+    return finishPlan([{ up: VOICINGS[id] || VOICINGS.major, seq: scalePattern(id) }],
+                      beatsPerKey(id) * 2, id);
+  }
+  function finishPlan(bars, stepsPerBar, id){
+    return {
+      id: id, bars: bars, stepsPerBar: stepsPerBar,
+      barsPerKey: bars.length,
+      stepsPerKey: stepsPerBar * bars.length,
+      keyBeats: stepsPerBar * bars.length / 2,
+      beatsPerBar: stepsPerBar / 2
+    };
   }
 
   function showPattern(sel, ki){
-    patLbl.textContent = "Pattern per key " + MDASH + " " + KEYS[ki].n + " " + sel.label.toLowerCase();
-    patNotes.textContent = patternNames(sel.id, ki);
+    var pc = KEYS[ki].pc, id = sel.id, key = KEYS[ki].n;
+    if(id === "drone"){
+      patLbl.textContent = "Pattern per key " + MDASH + " " + key + " drone";
+      patNotes.textContent = key + "   held for one bar";
+      return;
+    }
+    if(sel.inv && ARP_LABEL[id]){
+      var bars = makePlan(sel).bars;
+      patLbl.textContent = "Pattern per key " + MDASH + " " + key + " " +
+        ARP_LABEL[id].toLowerCase() + ", all inversions";
+      patNotes.textContent = bars.map(function(b){ return spellNotes(b.up, pc, id); })
+        .join("   " + MIDDOT + "   ");
+      return;
+    }
+    patLbl.textContent = "Pattern per key " + MDASH + " " + key + " " + sel.label.toLowerCase();
+    patNotes.textContent = spellNotes(VOICINGS[id] || VOICINGS.major, pc, id);
+  }
+
+  // reference line while playing: current key + current bar/inversion
+  function showPlaying(ki, bar){
+    var sel = cfg.sel, id = sel.id, pc = KEYS[ki].pc, key = KEYS[ki].n;
+    if(sel.inv && ARP_LABEL[id]){
+      var N = cfg.pl.bars.length - 1;
+      patLbl.textContent = "Pattern per key " + MDASH + " " + key + " " +
+        ARP_LABEL[id].toLowerCase() + " " + MIDDOT + " " + invName(bar, N);
+      patNotes.textContent = spellNotes(cfg.pl.bars[bar].up, pc, id);
+      return;
+    }
+    showPattern(sel, ki);
   }
 
   // ---- estimate ----
@@ -580,7 +663,8 @@
     }
     if(cat === "arp"){
       var a = checkedVal("arp");
-      return { id:a, label:ARP_LABEL[a] };
+      var inv = !!invEl.checked;
+      return { id:a, inv:inv, label: ARP_LABEL[a] + (inv ? " + inversions" : "") };
     }
     var s = checkedVal("scale");
     return { id:s, label:cap(s) + " scale" };
@@ -590,6 +674,7 @@
     scaleRow.hidden = cat !== "scale";
     modalRow.hidden = cat !== "mode";
     arpRow.hidden   = cat !== "arp";
+    invOpt.hidden   = cat !== "arp";
   }
   // one bar of drone; otherwise size the key to fit its up-and-down line,
   // rounded up to a whole bar (4 for triads, 6 for 7th arps, 8 for scales/modes)
@@ -600,9 +685,9 @@
   }
   function refresh(){
     var sel = readSelection();
+    var pl = makePlan(sel);
     var bpm = +bpmEl.value;
-    var bpk = beatsPerKey(sel.id);
-    var perLoop = 12 * bpk * 60 / bpm;
+    var perLoop = 12 * pl.keyBeats * 60 / bpm;
     var total = perLoop * loops;
     estimateEl.innerHTML = APPROX + " <b>" + fmtTime(total) + "</b> total " + MIDDOT + " " +
       fmtTime(perLoop) + " per lap";
@@ -613,7 +698,7 @@
     loopPlus.disabled = playing || loops>=24;
     if(!playing){
       dcSub.textContent = sel.label;
-      buildBeatDots(bpk);
+      buildBeatDots(pl.beatsPerBar);
       showPattern(sel, 0);
     }
   }
@@ -702,7 +787,8 @@
     if(!playing || !ctx) return;
     var spb = 60 / (+bpmEl.value);      // seconds per beat, read live
     var sEighth = spb * 0.5;
-    var pattern = cfg.mode === "drone" ? null : scalePattern(cfg.mode);
+    var drone = cfg.mode === "drone";
+    var barSteps = cfg.stepsPerBar;
 
     while(nextStepTime < ctx.currentTime + 0.12){
       if(stepCounter >= cfg.loops * cfg.loopLen){
@@ -714,23 +800,27 @@
       var loopNo = Math.floor(stepCounter / cfg.loopLen);
       var ki = Math.floor(p / cfg.stepsPerKey);
       var sik = p % cfg.stepsPerKey;          // eighth-note index within the key
-      var onBeat = (sik % 2) === 0;
+      var bar = Math.floor(sik / barSteps);   // which bar / inversion
+      var sib = sik % barSteps;               // eighth-note index within the bar
+      var onBeat = (sib % 2) === 0;
+      var tonic = 48 + KEYS[ki].pc;
 
-      if(onBeat) clickAt(nextStepTime, sik === 0);
+      if(onBeat) clickAt(nextStepTime, sib === 0);
 
-      if(cfg.mode === "drone"){
-        if(sik === 0) playNote(mtof(48 + KEYS[ki].pc), nextStepTime, cfg.bpk * spb, true);
-      }else if(sik < pattern.length){
-        playNote(mtof(48 + KEYS[ki].pc + pattern[sik]), nextStepTime, sEighth * 0.9, false);
+      if(drone){
+        if(sik === 0) playNote(mtof(tonic), nextStepTime, cfg.bpk * spb, true);
+      }else{
+        var seq = cfg.pl.bars[bar].seq;
+        if(sib < seq.length) playNote(mtof(tonic + seq[sib]), nextStepTime, sEighth * 0.9, false);
       }
 
-      if(onBeat) playhead.push({t:nextStepTime, ki:ki, loopNo:loopNo, bik:sik/2});
+      if(onBeat) playhead.push({t:nextStepTime, ki:ki, loopNo:loopNo, bar:bar, bik:sib/2});
       stepCounter++;
       nextStepTime += sEighth;
     }
   }
 
-  var shownKey = -1;
+  var shownKey = -1, shownBar = -1;
   function renderLoop(){
     if(ctx){
       var now = ctx.currentTime;
@@ -740,7 +830,10 @@
         setActive(ev.ki);
         paintBeat(ev.bik);
         dcSub.textContent = "Lap " + (ev.loopNo+1) + " / " + cfg.loops;
-        if(ev.ki !== shownKey){ showPattern(cfg.sel, ev.ki); shownKey = ev.ki; }
+        if(ev.ki !== shownKey || ev.bar !== shownBar){
+          showPlaying(ev.ki, ev.bar);
+          shownKey = ev.ki; shownBar = ev.bar;
+        }
       }
     }
     if(playing) rafId = requestAnimationFrame(renderLoop);
@@ -754,18 +847,18 @@
     consoleEl.classList.toggle("locked", on);
     dial.classList.toggle("playing", on);
     dial.classList.toggle("idle", !on);
-    document.querySelectorAll('input[name="cat"],input[name="scale"],input[name="modal"],input[name="arp"]')
+    document.querySelectorAll('input[name="cat"],input[name="scale"],input[name="modal"],input[name="arp"],#inv')
       .forEach(function(r){ r.disabled = on; });
     loopMinus.disabled = on || loops<=1;
     loopPlus.disabled = on || loops>=24;
   }
 
   function resetIdle(){
-    shownKey = -1;
+    shownKey = -1; shownBar = -1;
     var sel = readSelection();
     setActive(0);
     dcSub.textContent = sel.label;
-    buildBeatDots(beatsPerKey(sel.id));
+    buildBeatDots(makePlan(sel).beatsPerBar);
     showPattern(sel, 0);
   }
 
@@ -774,18 +867,22 @@
     if(ctx.state === "suspended") ctx.resume();
     completeEl.classList.remove("show");
     var sel = readSelection();
-    var bpk = beatsPerKey(sel.id);
+    var pl = makePlan(sel);
     // lengths are measured in eighth-note steps (2 per beat)
-    cfg = { mode:sel.id, sel:sel, bpk:bpk, stepsPerKey:bpk*2, loopLen:12*bpk*2, loops:loops };
+    cfg = {
+      mode:sel.id, sel:sel, pl:pl,
+      bpk:pl.beatsPerBar, stepsPerBar:pl.stepsPerBar,
+      stepsPerKey:pl.stepsPerKey, loopLen:12*pl.stepsPerKey, loops:loops
+    };
     stepCounter = 0;
     nextStepTime = ctx.currentTime + 0.15;
     playhead = [];
-    shownKey = -1;
+    shownKey = -1; shownBar = -1;
     playing = true;
     buildBeatDots(cfg.bpk);
     setPlayUI(true);
     setActive(0);
-    showPattern(sel, 0);
+    showPlaying(0, 0);
     schedule();
     scheduler = setInterval(schedule, 25);
     rafId = requestAnimationFrame(renderLoop);
@@ -840,6 +937,9 @@
   });
   document.querySelectorAll('input[name="arp"]').forEach(function(r){
     r.addEventListener("change", function(){ store("arp", r.value); refresh(); });
+  });
+  invEl.addEventListener("change", function(){
+    store("inv", invEl.checked ? "1" : "0"); refresh();
   });
 
   bpmEl.addEventListener("input", function(){ store("bpm", bpmEl.value); refresh(); });
@@ -899,6 +999,7 @@
       if(el) el.checked = true;
     }
     pick("cat"); pick("scale"); pick("modal"); pick("arp");
+    if(recall("inv") === "1") invEl.checked = true;
   })();
 
   syncSecondary();
