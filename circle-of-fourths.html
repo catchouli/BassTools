@@ -1,4 +1,5 @@
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Circle of Fourths Practice</title>
 <meta name="description" content="A looping circle-of-fourths practice trainer for bass guitar, with metronome, tempo and volume, and drone / major / minor / dominant modes.">
 <style>
@@ -312,6 +313,34 @@
     border-top:1px solid var(--line);padding-top:14px;max-width:62ch;
   }
 
+  /* ---- phones ---- */
+  @media (max-width:600px){
+    .wrap{padding:18px 13px 44px}
+    header.top{gap:12px;margin-bottom:20px}
+    .tagline{display:none}
+    .lede{margin-bottom:20px}
+
+    .console{padding:16px;gap:20px}
+    .controls{gap:18px}
+
+    /* roomier tap targets */
+    .segmented label{padding:12px 3px;font-size:12px}
+    .choice-row{gap:8px}
+    .choice-row label,.switch{padding:10px 13px}
+    input[type=range]{height:30px}
+    .stepper button,.stepper .val{height:42px}
+
+    /* loop count: the estimate takes its own line under the stepper */
+    .loop-row{flex-wrap:wrap;gap:10px}
+    .loop-row .estimate{flex-basis:100%}
+
+    /* reference notes wrap instead of scrolling sideways */
+    .pattern-line .notes{white-space:normal;line-height:1.75}
+
+    .ref{margin-top:22px}
+    footer{margin-top:28px}
+  }
+
   @media (prefers-reduced-motion:reduce){
     #pointer,#hl,.chip,.beats span{transition:none}
     .dial.playing .ring-outer{animation:none}
@@ -369,6 +398,7 @@
           <input type="radio" name="scale" id="s-major" value="major" checked><label for="s-major">Major</label>
           <input type="radio" name="scale" id="s-minor" value="minor"><label for="s-minor">Minor</label>
           <input type="radio" name="scale" id="s-dominant" value="dominant"><label for="s-dominant">Dominant</label>
+          <input type="radio" name="scale" id="s-chromatic" value="chromatic"><label for="s-chromatic">Chromatic</label>
         </div>
         <div class="choice-row" id="modalRow" hidden>
           <input type="radio" name="modal" id="mo-ionian" value="ionian" checked><label for="mo-ionian">Ionian</label>
@@ -406,7 +436,7 @@
 
       <div class="grp">
         <span class="grp-label">Times around the circle</span>
-        <div class="slider-row">
+        <div class="slider-row loop-row">
           <div class="stepper">
             <button type="button" id="loopMinus" aria-label="Fewer loops">&minus;</button>
             <span class="val" id="loopVal">4</span>
@@ -434,10 +464,10 @@
 
   <footer>
     Each pass plays every key in fourths. Drone holds the tonic for a bar; scales and modes run
-    an octave up and back down over two bars; arpeggios do the same with the chord tones, up to
-    the octave and back. With inversions on, each arpeggio walks through every inversion &mdash; a bar
-    each &mdash; then a closing root position an octave up. Nothing is recorded or sent anywhere; the
-    sound is generated live in your browser.
+    an octave up and back down; arpeggios do the same with the chord tones, up to the octave and
+    back. With inversions on, each arpeggio walks through every inversion &mdash; a bar each &mdash; then a
+    closing root position an octave up. Each key gets as many bars as its line needs. Nothing is
+    recorded or sent anywhere; the sound is generated live in your browser.
   </footer>
 </div>
 
@@ -461,6 +491,7 @@
     major:      [0,2,4,5,7,9,11,12],
     minor:      [0,2,3,5,7,8,10,12],
     dominant:   [0,2,4,5,7,9,10,12],   // major with a flat 7
+    chromatic:  [0,1,2,3,4,5,6,7,8,9,10,11,12],  // every semitone
     ionian:     [0,2,4,5,7,9,11,12],
     dorian:     [0,2,3,5,7,9,10,12],
     phrygian:   [0,1,3,5,7,8,10,12],
@@ -478,7 +509,7 @@
   // used to decide sharp vs. flat spelling.
   var PARENT_OFFSET = {
     major:0, ionian:0, dorian:2, phrygian:4, lydian:5,
-    mixolydian:7, dominant:7, aeolian:9, minor:9, locrian:11,
+    mixolydian:7, dominant:7, aeolian:9, minor:9, locrian:11, chromatic:0,
     triad:0, major7:0, minor7:9, dominant7:7
   };
   var FLATNAMES = ["C","D"+FLAT,"D","E"+FLAT,"E","F","G"+FLAT,"G","A"+FLAT,"A","B"+FLAT,"B"];
@@ -774,10 +805,12 @@
     o.onended = function(){ var k=live.indexOf(o); if(k>-1) live.splice(k,1); };
   }
 
-  // ascending line then back down, without repeating the top note
+  // ascending line then back down, without repeating the top note; the
+  // chromatic run also drops the closing tonic (... E D, not ... E D C)
   function scalePattern(id){
     var iv = VOICINGS[id] || VOICINGS.major;
-    return iv.concat(iv.slice(0, iv.length - 1).reverse());
+    var down = iv.slice(id === "chromatic" ? 1 : 0, iv.length - 1).reverse();
+    return iv.concat(down);
   }
 
   // The scheduler advances one eighth note at a time and only commits the
