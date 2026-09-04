@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BassTools</title>
+<meta name="description" content="A small collection of bass practice tools that run entirely in your browser: a circle-of-fourths trainer and a sight-reading generator.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --ground:#F2ECDE;
+    --panel:#FBF7EE;
+    --panel-2:#EDE6D6;
+    --ink:#211C14;
+    --ink-soft:#6A6152;
+    --ink-faint:#948B79;
+    --line:#DBD1BC;
+    --amber:#A85A24;
+    --amber-lit:#C67B3A;
+    --amber-glow:rgba(198,123,58,.16);
+    --sage:#5E7A54;
+    --sage-soft:#E7EEDD;
+    --shadow:24px 28px 60px -28px rgba(58,42,18,.35);
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --ground:#141109;
+      --panel:#1D1811;
+      --panel-2:#262017;
+      --ink:#F0E6D2;
+      --ink-soft:#A0947F;
+      --ink-faint:#6F6552;
+      --line:#332B1F;
+      --amber:#D2843F;
+      --amber-lit:#E7A65E;
+      --amber-glow:rgba(231,166,94,.14);
+      --sage:#8BA87F;
+      --sage-soft:#26301F;
+      --shadow:none;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#141109;
+    --panel:#1D1811;
+    --panel-2:#262017;
+    --ink:#F0E6D2;
+    --ink-soft:#A0947F;
+    --ink-faint:#6F6552;
+    --line:#332B1F;
+    --amber:#D2843F;
+    --amber-lit:#E7A65E;
+    --amber-glow:rgba(231,166,94,.14);
+    --sage:#8BA87F;
+    --sage-soft:#26301F;
+    --shadow:none;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--ground);color:var(--ink);
+    font-family:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+    font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1060px;margin:0 auto;padding:26px 22px 60px}
+  header.top{
+    display:flex;align-items:baseline;justify-content:space-between;
+    gap:18px;flex-wrap:wrap;
+    border-bottom:1px solid var(--line);
+    padding-bottom:16px;margin-bottom:26px;
+  }
+  .brand{display:flex;align-items:baseline;gap:12px}
+  .lamp{
+    width:9px;height:9px;border-radius:50%;
+    background:var(--amber-lit);align-self:center;
+    box-shadow:0 0 0 3px var(--amber-glow);flex:none;
+  }
+  .wordmark{font-family:"Fraunces","Georgia",serif;font-weight:900;font-size:25px;letter-spacing:-.01em}
+  .wordmark b{font-weight:900;color:var(--amber)}
+  .tagline{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink-faint);
+  }
+  .theme-btn{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;letter-spacing:.08em;
+    background:transparent;color:var(--ink-soft);
+    border:1px solid var(--line);border-radius:999px;padding:5px 12px;cursor:pointer;
+  }
+  .theme-btn:hover{color:var(--ink);border-color:var(--ink-faint)}
+  .lede{max-width:60ch;color:var(--ink-soft);margin:0 0 30px}
+  .lede strong{color:var(--ink);font-weight:600}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+  .card{
+    display:block;background:var(--panel);border:1px solid var(--line);
+    border-radius:16px;box-shadow:var(--shadow);padding:24px;
+    text-decoration:none;color:inherit;
+    transition:border-color .15s,transform .1s;
+  }
+  .card:hover{border-color:var(--amber-lit);transform:translateY(-2px)}
+  .card h2{
+    font-family:"Fraunces","Georgia",serif;font-weight:900;font-size:21px;
+    margin:0 0 8px;letter-spacing:-.01em;
+  }
+  .card p{margin:0;color:var(--ink-soft);font-size:13.5px}
+  .card .go{
+    margin-top:14px;font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+  }
+  footer{
+    margin-top:34px;font-size:12px;color:var(--ink-faint);
+    border-top:1px solid var(--line);padding-top:14px;max-width:62ch;
+  }
+  @media (max-width:600px){
+    .wrap{padding:18px 13px 44px}
+    header.top{gap:12px;margin-bottom:20px}
+    .tagline{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <span class="lamp" aria-hidden="true"></span>
+      <span class="wordmark">Bass<b>Tools</b></span>
+      <span class="tagline">Bass practice tools</span>
+    </div>
+    <button class="theme-btn" id="themeBtn" type="button">Theme</button>
+  </header>
+
+  <p class="lede"><strong>A small collection of bass practice tools</strong> that run entirely in your browser. Nothing is recorded or sent anywhere.</p>
+
+  <div class="grid">
+    <a class="card" href="circle-of-fourths.html">
+      <h2>Circle of Fourths Practice</h2>
+      <p>A looping circle-of-fourths trainer with metronome, tempo and volume, and drone / scale / mode / arpeggio modes across all twelve keys.</p>
+      <span class="go">Open &rarr;</span>
+    </a>
+    <a class="card" href="sight-reading.html">
+      <h2>Sight Reading Practice</h2>
+      <p>Procedurally generated bass or treble clef notation at a 1&ndash;100 difficulty, with randomized key signatures, play-along audio, and PNG export.</p>
+      <span class="go">Open &rarr;</span>
+    </a>
+  </div>
+
+  <footer>More tools land here as they're built.</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  function store(k,v){ try{ localStorage.setItem("basstools-"+k, v); }catch(e){} }
+  function recall(k){ try{ return localStorage.getItem("basstools-"+k); }catch(e){ return null; } }
+  function applyTheme(t){
+    if(t==="light" || t==="dark") document.documentElement.setAttribute("data-theme", t);
+    else document.documentElement.removeAttribute("data-theme");
+  }
+  document.getElementById("themeBtn").addEventListener("click", function(){
+    var cur = document.documentElement.getAttribute("data-theme");
+    var next = cur==="dark" ? "light" : "dark";
+    applyTheme(next); store("theme", next);
+  });
+  var t = recall("theme"); if(t) applyTheme(t);
+})();
+</script>
+</body>
+</html>

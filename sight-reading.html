@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sight Reading Practice</title>
+<meta name="description" content="A procedurally generated sight-reading trainer for bass and guitar: pick your instrument, a 1-100 difficulty slider, randomized key signatures and time signatures, a metronome, and play-along audio, entirely in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --ground:#F2ECDE;
+    --panel:#FBF7EE;
+    --panel-2:#EDE6D6;
+    --ink:#211C14;
+    --ink-soft:#6A6152;
+    --ink-faint:#948B79;
+    --line:#DBD1BC;
+    --amber:#A85A24;
+    --amber-lit:#C67B3A;
+    --amber-glow:rgba(198,123,58,.16);
+    --sage:#5E7A54;
+    --sage-soft:#E7EEDD;
+    --shadow:24px 28px 60px -28px rgba(58,42,18,.35);
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --ground:#141109;
+      --panel:#1D1811;
+      --panel-2:#262017;
+      --ink:#F0E6D2;
+      --ink-soft:#A0947F;
+      --ink-faint:#6F6552;
+      --line:#332B1F;
+      --amber:#D2843F;
+      --amber-lit:#E7A65E;
+      --amber-glow:rgba(231,166,94,.14);
+      --sage:#8BA87F;
+      --sage-soft:#26301F;
+      --shadow:none;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#141109;
+    --panel:#1D1811;
+    --panel-2:#262017;
+    --ink:#F0E6D2;
+    --ink-soft:#A0947F;
+    --ink-faint:#6F6552;
+    --line:#332B1F;
+    --amber:#D2843F;
+    --amber-lit:#E7A65E;
+    --amber-glow:rgba(231,166,94,.14);
+    --sage:#8BA87F;
+    --sage-soft:#26301F;
+    --shadow:none;
+  }
+
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--ground);
+    color:var(--ink);
+    font-family:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+    font-size:15px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1060px;margin:0 auto;padding:26px 22px 60px}
+
+  header.top{
+    display:flex;align-items:baseline;justify-content:space-between;
+    gap:18px;flex-wrap:wrap;
+    border-bottom:1px solid var(--line);
+    padding-bottom:16px;margin-bottom:26px;
+  }
+  .brand{display:flex;align-items:baseline;gap:12px}
+  .lamp{
+    width:9px;height:9px;border-radius:50%;
+    background:var(--amber-lit);align-self:center;
+    box-shadow:0 0 0 3px var(--amber-glow);flex:none;
+  }
+  .wordmark{
+    font-family:"Fraunces","Georgia",serif;
+    font-weight:900;font-size:25px;letter-spacing:-.01em;
+  }
+  .wordmark b{font-weight:900;color:var(--amber)}
+  .tagline{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink-faint);
+  }
+  .theme-btn{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:12px;letter-spacing:.08em;
+    background:transparent;color:var(--ink-soft);
+    border:1px solid var(--line);border-radius:999px;
+    padding:5px 12px;cursor:pointer;
+  }
+  .theme-btn:hover{color:var(--ink);border-color:var(--ink-faint)}
+
+  .lede{max-width:66ch;color:var(--ink-soft);margin:0 0 24px}
+  .lede strong{color:var(--ink);font-weight:600}
+
+  .console{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:16px;
+    box-shadow:var(--shadow);
+    padding:22px;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(260px,340px);
+    gap:26px;
+  }
+  @media (max-width:860px){
+    .console{grid-template-columns:1fr;gap:22px;padding:18px}
+  }
+
+  .notation-panel{display:flex;flex-direction:column;gap:14px;min-width:0}
+  .notation-wrap{
+    position:relative;background:var(--panel-2);
+    border:1px solid var(--line);border-radius:12px;
+    padding:10px;overflow-x:auto;
+  }
+  .notation-wrap canvas{display:block}
+  #highlightCanvas{position:absolute;left:10px;top:10px;pointer-events:none}
+  .notation-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .btn{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:12.5px;letter-spacing:.04em;
+    background:var(--panel-2);color:var(--ink);
+    border:1px solid var(--line);border-radius:9px;
+    padding:9px 14px;cursor:pointer;
+  }
+  .btn:hover{border-color:var(--ink-faint)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+
+  .controls{display:flex;flex-direction:column;gap:20px;min-width:0}
+  .grp{display:flex;flex-direction:column;gap:9px}
+  .grp-label{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--ink-faint);
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+  }
+
+  .segmented{
+    display:flex;border:1px solid var(--line);border-radius:10px;
+    overflow:hidden;background:var(--panel-2);
+  }
+  .segmented .seg{flex:1}
+  .segmented input{position:absolute;opacity:0;pointer-events:none}
+  .segmented label{
+    display:block;text-align:center;padding:9px 4px;cursor:pointer;
+    font-size:12.5px;white-space:nowrap;color:var(--ink-soft);
+    border-right:1px solid var(--line);
+    transition:background .15s,color .15s;
+  }
+  .segmented .seg:last-child label{border-right:none}
+  .segmented input:checked+label{background:var(--amber);color:#fff;font-weight:600}
+  .segmented input:focus-visible+label{outline:2px solid var(--amber-lit);outline-offset:-3px}
+  .console.locked .segmented label{cursor:not-allowed;opacity:.55}
+
+  .choice-row{display:flex;flex-wrap:wrap;align-items:center;gap:7px}
+  .choice-row input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+  .choice-row label{
+    display:block;padding:7px 12px;border-radius:999px;cursor:pointer;
+    white-space:nowrap;font-size:12.5px;color:var(--ink-soft);
+    border:1px solid var(--line);background:var(--panel-2);
+    transition:background .15s,color .15s,border-color .15s;
+  }
+  .choice-row label:hover{border-color:var(--ink-faint);color:var(--ink)}
+  .choice-row input:checked+label{background:var(--amber);color:#fff;border-color:var(--amber);font-weight:500}
+  .choice-row input:focus-visible+label{outline:2px solid var(--amber-lit);outline-offset:2px}
+  .console.locked .choice-row label{cursor:not-allowed;opacity:.55}
+
+  .slider-row{display:flex;align-items:center;gap:14px}
+  input[type=range]{flex:1;min-width:0;accent-color:var(--amber-lit);height:22px;cursor:pointer}
+  .readout{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-variant-numeric:tabular-nums;
+    font-size:16px;font-weight:500;min-width:70px;text-align:right;
+  }
+  .readout small{font-size:11px;color:var(--ink-faint);letter-spacing:.06em}
+  .tier-label{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:11.5px;color:var(--ink-soft);
+  }
+
+  .stepper{display:flex;align-items:center;gap:0;width:fit-content}
+  .stepper button{
+    width:38px;height:38px;font-size:19px;line-height:1;
+    background:var(--panel-2);color:var(--ink);
+    border:1px solid var(--line);cursor:pointer;
+  }
+  .stepper button:first-child{border-radius:9px 0 0 9px}
+  .stepper button:last-child{border-radius:0 9px 9px 0}
+  .stepper button:hover{border-color:var(--ink-faint)}
+  .stepper button:disabled{opacity:.4;cursor:not-allowed}
+  .stepper .val{
+    width:56px;height:38px;display:flex;align-items:center;justify-content:center;
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+    font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:16px;
+    font-variant-numeric:tabular-nums;background:var(--panel);
+  }
+
+  .disclosure{
+    background:transparent;border:none;color:var(--ink-soft);
+    font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;
+    letter-spacing:.1em;text-transform:uppercase;cursor:pointer;padding:0;
+  }
+  .disclosure:hover{color:var(--ink)}
+  .adv-panel{
+    display:flex;flex-direction:column;gap:14px;
+    padding:14px 14px 4px;margin-top:2px;
+    border:1px dashed var(--line);border-radius:10px;
+    background:var(--panel-2);
+  }
+  .adv-panel .grp-label{font-size:10.5px}
+  .reset-link{
+    background:transparent;border:none;color:var(--amber);
+    font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;
+    text-decoration:underline;cursor:pointer;padding:0;align-self:flex-start;
+  }
+
+  .play{
+    margin-top:2px;
+    width:100%;padding:15px;border:none;border-radius:11px;cursor:pointer;
+    background:var(--amber);color:#fff;
+    font-family:"Fraunces","Georgia",serif;font-weight:900;
+    font-size:18px;letter-spacing:.01em;
+    display:flex;align-items:center;justify-content:center;gap:10px;
+    transition:background .15s,transform .06s;
+  }
+  .play:hover{background:var(--amber-lit)}
+  .play:active{transform:translateY(1px)}
+  .play:focus-visible{outline:3px solid var(--amber-lit);outline-offset:3px}
+  .play.playing{background:var(--panel-2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+  .play.secondary{background:var(--sage)}
+  .play.secondary:hover{background:var(--sage)}
+  .play .glyph{font-family:"IBM Plex Sans",sans-serif;font-size:14px}
+
+  footer{
+    margin-top:34px;font-size:12px;color:var(--ink-faint);
+    border-top:1px solid var(--line);padding-top:14px;max-width:62ch;
+  }
+
+  @media (max-width:600px){
+    .wrap{padding:18px 13px 44px}
+    header.top{gap:12px;margin-bottom:20px}
+    .tagline{display:none}
+    .lede{margin-bottom:20px}
+    .console{padding:16px;gap:20px}
+    .controls{gap:18px}
+    .segmented label{padding:12px 3px;font-size:12px}
+    .choice-row{gap:8px}
+    .choice-row label{padding:10px 13px}
+    input[type=range]{height:30px}
+    .stepper button,.stepper .val{height:42px}
+    footer{margin-top:28px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    .btn,.play{transition:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <span class="lamp" aria-hidden="true"></span>
+      <span class="wordmark">Bass<b>Tools</b></span>
+      <span class="tagline">Bass practice tools</span>
+    </div>
+    <button class="theme-btn" id="themeBtn" type="button">Theme</button>
+  </header>
+
+  <p class="lede">
+    <strong>Sight Reading Practice.</strong> Generates a fresh, playable line every time &mdash;
+    never the same one twice, and never AI-written &mdash; using chord progressions, a difficulty-tiered
+    rhythm library, and voice-leading rules running entirely in your browser. Pick a clef and a
+    difficulty, press Generate, and read.
+  </p>
+
+  <div class="console" id="console">
+    <div class="notation-panel">
+      <div class="notation-wrap" id="notationWrap">
+        <canvas id="notationCanvas"></canvas>
+        <canvas id="highlightCanvas"></canvas>
+      </div>
+      <div class="notation-actions">
+        <button class="btn" id="pngBtn" type="button">Download PNG</button>
+        <span class="tier-label" id="genInfo"></span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="grp">
+        <span class="grp-label">Clef</span>
+        <div class="segmented">
+          <span class="seg"><input type="radio" name="clef" id="clef-bass" value="bass" checked><label for="clef-bass">Bass</label></span>
+          <span class="seg"><input type="radio" name="clef" id="clef-treble" value="treble"><label for="clef-treble">Treble</label></span>
+        </div>
+      </div>
+
+      <div class="grp">
+        <span class="grp-label">Keys to include</span>
+        <div class="choice-row" id="keyRow"></div>
+      </div>
+
+      <div class="grp">
+        <span class="grp-label">
+          Difficulty
+          <button class="disclosure" id="advToggle" type="button" aria-expanded="false">Advanced &#9656;</button>
+        </span>
+        <div class="slider-row">
+          <input type="range" id="diff" min="1" max="100" step="1" value="30" aria-label="Difficulty">
+          <span class="readout"><span id="diffVal">30</span></span>
+        </div>
+        <span class="tier-label" id="diffTier"></span>
+
+        <div class="adv-panel" id="advPanel" hidden>
+          <div class="grp">
+            <span class="grp-label">Rest probability</span>
+            <div class="slider-row">
+              <input type="range" id="k-rest" min="0" max="35" step="1" value="0">
+              <span class="readout"><span id="k-rest-val">0</span>%</span>
+            </div>
+          </div>
+          <div class="grp">
+            <span class="grp-label">Syncopation</span>
+            <div class="slider-row">
+              <input type="range" id="k-sync" min="0" max="50" step="1" value="0">
+              <span class="readout"><span id="k-sync-val">0</span>%</span>
+            </div>
+          </div>
+          <div class="grp">
+            <span class="grp-label">Leap size</span>
+            <div class="slider-row">
+              <input type="range" id="k-leap" min="15" max="60" step="1" value="15">
+              <span class="readout"><span id="k-leap-val">15</span>%</span>
+            </div>
+          </div>
+          <div class="grp">
+            <span class="grp-label">Extra accidentals</span>
+            <div class="slider-row">
+              <input type="range" id="k-acc" min="0" max="35" step="1" value="0">
+              <span class="readout"><span id="k-acc-val">0</span>%</span>
+            </div>
+          </div>
+          <div class="grp">
+            <span class="grp-label">Key complexity</span>
+            <div class="slider-row">
+              <input type="range" id="k-keycx" min="0" max="4" step="1" value="0">
+              <span class="readout"><span id="k-keycx-val">&le;1&#9839;/&#9837;</span></span>
+            </div>
+          </div>
+          <button class="reset-link" id="advReset" type="button">Reset to difficulty</button>
+        </div>
+      </div>
+
+      <div class="grp">
+        <span class="grp-label">Tempo</span>
+        <div class="slider-row">
+          <input type="range" id="tempo" min="40" max="160" step="1" value="88" aria-label="Beats per minute">
+          <span class="readout"><span id="tempoVal">88</span> <small>BPM</small></span>
+        </div>
+      </div>
+
+      <div class="grp">
+        <span class="grp-label">Bars</span>
+        <div class="stepper">
+          <button type="button" id="barsMinus" aria-label="Fewer bars">&minus;</button>
+          <span class="val" id="barsVal">8</span>
+          <button type="button" id="barsPlus" aria-label="More bars">+</button>
+        </div>
+      </div>
+
+      <button class="play" id="genBtn" type="button">
+        <span class="glyph" aria-hidden="true">&#9998;</span><span>Generate</span>
+      </button>
+      <button class="play secondary" id="playBtn" type="button" aria-pressed="false">
+        <span class="glyph" aria-hidden="true">&#9654;</span><span id="playLabel">Play</span>
+      </button>
+    </div>
+  </div>
+
+  <footer>
+    Every line is generated fresh by a rules-based algorithm running in your browser &mdash; a chord
+    progression, a difficulty-tiered rhythm library, and voice-leading rules over the randomized
+    key &mdash; never a fixed catalogue and never AI-written. Right-click the notation to save it as an
+    image, or use the Download PNG button. Nothing is recorded or sent anywhere.
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.3/build/cjs/vexflow.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  var $ = function(id){ return document.getElementById(id); };
+
+  // ---- persistence ----
+  function store(k,v){ try{ localStorage.setItem("basstools-"+k, v); }catch(e){} }
+  function recall(k){ try{ return localStorage.getItem("basstools-"+k); }catch(e){ return null; } }
+
+  function clamp(v,lo,hi){ return Math.max(lo, Math.min(hi, v)); }
+
+  // ================= MUSIC THEORY =================
+  var LETTERS = ["C","D","E","F","G","A","B"];
+  var NATPC = {C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+  var KEY_TABLE = [
+    {name:"C",  vfKey:"C",  pc:0,  acc:0, sig:{}, sharpPref:true},
+    {name:"G",  vfKey:"G",  pc:7,  acc:1, sig:{F:1}, sharpPref:true},
+    {name:"D",  vfKey:"D",  pc:2,  acc:2, sig:{F:1,C:1}, sharpPref:true},
+    {name:"A",  vfKey:"A",  pc:9,  acc:3, sig:{F:1,C:1,G:1}, sharpPref:true},
+    {name:"E",  vfKey:"E",  pc:4,  acc:4, sig:{F:1,C:1,G:1,D:1}, sharpPref:true},
+    {name:"B",  vfKey:"B",  pc:11, acc:5, sig:{F:1,C:1,G:1,D:1,A:1}, sharpPref:true},
+    {name:"F",  vfKey:"F",  pc:5,  acc:1, sig:{B:-1}, sharpPref:false},
+    {name:"Bb", vfKey:"Bb", pc:10, acc:2, sig:{B:-1,E:-1}, sharpPref:false},
+    {name:"Eb", vfKey:"Eb", pc:3,  acc:3, sig:{B:-1,E:-1,A:-1}, sharpPref:false},
+    {name:"Ab", vfKey:"Ab", pc:8,  acc:4, sig:{B:-1,E:-1,A:-1,D:-1}, sharpPref:false},
+    {name:"Db", vfKey:"Db", pc:1,  acc:5, sig:{B:-1,E:-1,A:-1,D:-1,G:-1}, sharpPref:false},
+    {name:"Gb", vfKey:"Gb", pc:6,  acc:6, sig:{B:-1,E:-1,A:-1,D:-1,G:-1,C:-1}, sharpPref:false}
+  ];
+  var KEY_BY_NAME = {};
+  KEY_TABLE.forEach(function(k){ KEY_BY_NAME[k.name] = k; });
+  var KEY_NAMES = KEY_TABLE.map(function(k){ return k.name; });
+
+  function accStr(acc){
+    if(acc<=-2) return "bb";
+    if(acc===-1) return "b";
+    if(acc===0) return "";
+    if(acc===1) return "#";
+    return "##";
+  }
+
+  function buildSpellTable(key){
+    var startIdx = LETTERS.indexOf(key.name.charAt(0));
+    var diatonic = [];
+    for(var d=0; d<7; d++){
+      var letter = LETTERS[(startIdx+d)%7];
+      var acc = key.sig[letter] || 0;
+      var pc = ((NATPC[letter] + acc) % 12 + 12) % 12;
+      diatonic.push({letter:letter, acc:acc, pc:pc});
+    }
+    var byPc = {};
+    diatonic.forEach(function(o){ byPc[o.pc] = o; });
+    var table = [];
+    for(var pc=0; pc<12; pc++){
+      if(byPc[pc]){ table[pc] = {letter:byPc[pc].letter, acc:byPc[pc].acc}; continue; }
+      var lower = byPc[(pc-1+12)%12], upper = byPc[(pc+1)%12];
+      if(key.sharpPref && lower) table[pc] = {letter:lower.letter, acc:lower.acc+1};
+      else if(upper) table[pc] = {letter:upper.letter, acc:upper.acc-1};
+      else if(lower) table[pc] = {letter:lower.letter, acc:lower.acc+1};
+      else table[pc] = {letter:"C", acc:0};
+    }
+    return table;
+  }
+
+  function vfKeyString(midi, letter, acc){
+    var oct = Math.floor((midi-acc)/12) - 1;
+    return letter.toLowerCase() + accStr(acc) + "/" + oct;
+  }
+
+  var DEGREE_INDEX = {I:0, ii:1, iii:2, IV:3, V:4, vi:5, vii:6};
+  var MAJOR_STEPS = [0,2,4,5,7,9,11];
+  var DEGREE_QUALITY = ["maj","min","min","maj","maj","min","dim"];
+  var TONES_BY_QUALITY = {maj:[0,4,7], min:[0,3,7], dim:[0,3,6]};
+
+  function diatonicChord(key, numeral){
+    var idx = DEGREE_INDEX[numeral];
+    var rootPc = (key.pc + MAJOR_STEPS[idx]) % 12;
+    var quality = DEGREE_QUALITY[idx];
+    return {degree:numeral, rootPc:rootPc, quality:quality, tones:TONES_BY_QUALITY[quality]};
+  }
+
+  var PROGRESSIONS = [
+    ["I","IV","V","I"], ["I","V","vi","IV"], ["I","vi","IV","V"],
+    ["I","IV","I","V"], ["ii","V","I","I"]
+  ];
+  function buildProgression(key, barCount){
+    var t = PROGRESSIONS[Math.floor(Math.random()*PROGRESSIONS.length)];
+    var chords = [];
+    for(var i=0;i<barCount;i++) chords.push(diatonicChord(key, t[i % t.length]));
+    return chords;
+  }
+
+  function diatonicPcSet(key){
+    return MAJOR_STEPS.map(function(s){ return (key.pc+s)%12; });
+  }
+
+  var LOW = 28; // E1
+
+  function nearestOctave(pc, near){
+    pc = ((pc%12)+12)%12;
+    if(near===null || near===undefined) near = LOW+6;
+    var best=null, bestDist=Infinity;
+    for(var m=0; m<108; m++){
+      if(m%12===pc){
+        var dist=Math.abs(m-near);
+        if(dist<bestDist){ bestDist=dist; best=m; }
+      }
+    }
+    return best;
+  }
+  function clampToRange(midi, low, high){
+    while(midi<low) midi+=12;
+    while(midi>high) midi-=12;
+    return midi;
+  }
+  function diatonicStepToward(prevMidi, targetMidi, key){
+    var pcs = diatonicPcSet(key);
+    if(prevMidi===targetMidi) return prevMidi;
+    var dir = targetMidi>prevMidi ? 1 : -1;
+    for(var m=prevMidi+dir; Math.abs(m-prevMidi)<=12; m+=dir){
+      if(pcs.indexOf(((m%12)+12)%12)>-1) return m;
+    }
+    return prevMidi;
+  }
+  function chromaticApproach(targetMidi){
+    return Math.random()<0.7 ? targetMidi-1 : targetMidi+1;
+  }
+  function tonesOf(chord, kind){
+    var i = kind==="root"?0:kind==="third"?1:2;
+    return chord.tones[i];
+  }
+
+  // ================= RHYTHM CELLS =================
+  var CELLS = [
+    {id:"quarters", minDiff:1, tags:[], tokens:[{u:4},{u:4},{u:4},{u:4}]},
+    {id:"half-half", minDiff:21, tags:[], tokens:[{u:8},{u:8}]},
+    {id:"whole", minDiff:21, tags:[], tokens:[{u:16}]},
+    {id:"half-Q-Q", minDiff:21, tags:[], tokens:[{u:8},{u:4},{u:4}]},
+    {id:"Q-Q-half", minDiff:21, tags:[], tokens:[{u:4},{u:4},{u:8}]},
+    {id:"8pair-lead", minDiff:25, tags:[], tokens:[{u:2},{u:2},{u:4},{u:4},{u:4}]},
+    {id:"8pair-mid", minDiff:25, tags:[], tokens:[{u:4},{u:2},{u:2},{u:4},{u:4}]},
+    {id:"8pair-tail", minDiff:25, tags:[], tokens:[{u:4},{u:4},{u:4},{u:2},{u:2}]},
+    {id:"two-8pairs", minDiff:30, tags:[], tokens:[{u:2},{u:2},{u:2},{u:2},{u:4},{u:4}]},
+    {id:"Qrest-1", minDiff:41, tags:["rest"], tokens:[{u:4,rest:true},{u:4},{u:4},{u:4}]},
+    {id:"Qrest-3", minDiff:41, tags:["rest"], tokens:[{u:4},{u:4},{u:4,rest:true},{u:4}]},
+    {id:"eighths-all", minDiff:41, tags:[], tokens:[{u:2},{u:2},{u:2},{u:2},{u:2},{u:2},{u:2},{u:2}]},
+    {id:"8rest-pickup", minDiff:61, tags:["rest"], tokens:[{u:2,rest:true},{u:2},{u:4},{u:4},{u:4}]},
+    {id:"dotted-push", minDiff:61, tags:["sync"], tokens:[{u:4,tie:true},{u:2},{u:2},{u:4},{u:4}]},
+    {id:"tied-8-over-beat", minDiff:65, tags:["sync"], tokens:[{u:4},{u:2},{u:2,tie:true},{u:4},{u:4}]},
+    {id:"tied-backbeat", minDiff:70, tags:["sync"], tokens:[{u:4},{u:4},{u:2,tie:true},{u:2},{u:4}]},
+    {id:"16th-turn", minDiff:81, tags:["sixteenth"], tokens:[{u:4},{u:4},{u:4},{u:1},{u:1},{u:1},{u:1}]},
+    {id:"16th-rest-mix", minDiff:81, tags:["sixteenth","rest"], tokens:[{u:4},{u:4},{u:1,rest:true},{u:1},{u:2},{u:4}]}
+  ];
+
+  function expandCell(tokens){
+    var logical = [], pos = 0;
+    for(var i=0;i<tokens.length;i++){
+      var t = tokens[i];
+      if(t.tie){
+        var t2 = tokens[i+1];
+        logical.push({start:pos, units:t.u+t2.u, writtenAs:[t.u,t2.u], rest:false});
+        pos += t.u+t2.u;
+        i++;
+      }else{
+        logical.push({start:pos, units:t.u, writtenAs:[t.u], rest:!!t.rest});
+        pos += t.u;
+      }
+    }
+    return logical;
+  }
+
+  function cellWeight(cell, d, eff){
+    var age = clamp((d-cell.minDiff)/40,0,1);
+    var w = 0.4+1.6*age;
+    if(cell.tags.indexOf("rest")>-1) w *= (0.3+eff.restProb*2);
+    if(cell.tags.indexOf("sync")>-1) w *= (0.2+eff.syncProb*2.5);
+    if(cell.tags.indexOf("sixteenth")>-1) w *= (0.3+((d-1)/99)*1.5);
+    return w;
+  }
+  function weightedPick(items, weights){
+    var total=0; for(var i=0;i<weights.length;i++) total+=weights[i];
+    var r=Math.random()*total;
+    for(var i=0;i<items.length;i++){ r-=weights[i]; if(r<=0) return items[i]; }
+    return items[items.length-1];
+  }
+  function pickCell(d, eff){
+    var eligible = CELLS.filter(function(c){ return d>=c.minDiff; });
+    var weights = eligible.map(function(c){ return cellWeight(c,d,eff); });
+    return weightedPick(eligible, weights);
+  }
+
+  // ================= DIFFICULTY MAPPING =================
+  function restProbAuto(d){ return d<41?0:0.35*clamp((d-41)/59,0,1); }
+  function syncProbAuto(d){ return d<61?0:0.5*clamp((d-61)/39,0,1); }
+  function leapProbAuto(d){ return 0.15+0.45*((d-1)/99); }
+  function accidentalProbAuto(d){ return d<=20?0:0.35*(d-20)/80; }
+  function rangeWidthAuto(d){ return 12+Math.round(12*((d-1)/99)); }
+  function keyComplexityIdxAuto(d){ return d<=20?0:d<=40?1:d<=60?2:d<=80?3:4; }
+  var KEY_COMPLEXITY_MAX = [1,2,3,4,6];
+  function difficultyLabel(d){
+    if(d<=20) return "Tier 1 · quarter notes only, no rests, simplest keys";
+    if(d<=40) return "Tier 2 · half/whole notes, simple eighth-note pairs";
+    if(d<=60) return "Tier 3 · rests, eighth-note runs";
+    if(d<=80) return "Tier 4 · syncopation, more accidentals";
+    return "Tier 5 · sixteenth notes, rests, syncopation, wide range";
+  }
+
+  var AUTO_FN = {
+    restProb: restProbAuto, syncProb: syncProbAuto, leapProb: leapProbAuto,
+    accidentalProb: accidentalProbAuto, keyComplexity: keyComplexityIdxAuto
+  };
+  var knobs = {
+    restProb:{auto:true,value:0}, syncProb:{auto:true,value:0},
+    leapProb:{auto:true,value:0.3}, accidentalProb:{auto:true,value:0},
+    keyComplexity:{auto:true,value:0}
+  };
+  function effective(name, d){
+    var k = knobs[name];
+    return k.auto ? AUTO_FN[name](d) : k.value;
+  }
+
+  var chips = {}; KEY_NAMES.forEach(function(n){ chips[n]=true; });
+  var chipsTouched = false;
+
+  function eligibleKeysAuto(d){
+    var maxAcc = KEY_COMPLEXITY_MAX[effective('keyComplexity', d)];
+    return KEY_TABLE.filter(function(k){ return k.acc<=maxAcc; }).map(function(k){ return k.name; });
+  }
+  function syncChipsToAuto(d){
+    if(chipsTouched) return;
+    var auto = eligibleKeysAuto(d);
+    KEY_NAMES.forEach(function(n){ chips[n] = auto.indexOf(n)>-1; });
+  }
+  function pickKeyName(){
+    var pool = KEY_NAMES.filter(function(n){ return chips[n]; });
+    if(!pool.length) pool = KEY_NAMES.slice();
+    return pool[Math.floor(Math.random()*pool.length)];
+  }
+
+  // ================= GENERATION =================
+  function generateBar(chord, nextChord, cell, d, eff, key, prevMidi){
+    var logical = expandCell(cell.tokens);
+    var rangeHi = LOW + rangeWidthAuto(d);
+    var notes = [];
+    for(var idx=0; idx<logical.length; idx++){
+      var slot = logical[idx];
+      if(slot.rest){
+        notes.push({type:"rest", dur:slot.units, writtenAs:slot.writtenAs});
+        continue;
+      }
+      var strong = (slot.start % 4)===0;
+      var downbeat = slot.start===0;
+      var midi;
+      if(strong){
+        var r = Math.random();
+        var kind = downbeat
+          ? (r<0.65?"root":(r<0.90?"five":"third"))
+          : (r<0.45?"root":(r<0.75?"five":"third"));
+        midi = nearestOctave(chord.rootPc + tonesOf(chord, kind), prevMidi);
+      }else{
+        var isLast = idx===logical.length-1;
+        var targetPc = isLast ? nextChord.rootPc : chord.rootPc;
+        var target = nearestOctave(targetPc, prevMidi);
+        var r2 = Math.random();
+        if(r2 < eff.accidentalProb){
+          midi = chromaticApproach(target);
+        }else if(r2 < eff.accidentalProb + eff.leapProb){
+          var kinds = ["root","third","five"];
+          midi = nearestOctave(chord.rootPc + tonesOf(chord, kinds[Math.floor(Math.random()*3)]), prevMidi);
+        }else{
+          midi = diatonicStepToward(prevMidi===null?target:prevMidi, target, key);
+        }
+      }
+      midi = clampToRange(midi, LOW, rangeHi);
+      notes.push({type:"note", midi:midi, dur:slot.units, writtenAs:slot.writtenAs});
+      prevMidi = midi;
+    }
+    return {notes:notes, lastMidi:prevMidi};
+  }
+
+  function applyCrossBarTies(barsArr, p){
+    for(var i=0;i<barsArr.length-1;i++){
+      var last = barsArr[i].notes[barsArr[i].notes.length-1];
+      var first = barsArr[i+1].notes[0];
+      if(last.type==="note" && first.type==="note" &&
+         last.writtenAs.length===1 && first.writtenAs.length===1 &&
+         Math.random()<p){
+        first.midi = last.midi;
+        last.tieToNext = true;
+        first.tiedFromPrev = true;
+      }
+    }
+  }
+
+  function generateSong(){
+    var d = +diffEl.value;
+    var clef = document.querySelector('input[name="clef"]:checked').value;
+    var barCount = barsCount;
+    var tempo = +tempoEl.value;
+    syncChipsToAuto(d);
+    var keyName = pickKeyName();
+    var key = KEY_BY_NAME[keyName];
+    var spellTable = buildSpellTable(key);
+    var progression = buildProgression(key, barCount);
+    var eff = {
+      restProb: effective('restProb', d), syncProb: effective('syncProb', d),
+      leapProb: effective('leapProb', d), accidentalProb: effective('accidentalProb', d)
+    };
+
+    var barsArr = [], prevMidi = null;
+    for(var i=0;i<barCount;i++){
+      var chord = progression[i];
+      var nextChord = progression[(i+1)%barCount];
+      var cell = pickCell(d, eff);
+      var built = generateBar(chord, nextChord, cell, d, eff, key, prevMidi);
+      barsArr.push({chord:chord, cellId:cell.id, notes:built.notes});
+      prevMidi = built.lastMidi;
+    }
+    applyCrossBarTies(barsArr, eff.syncProb*0.4);
+
+    return {
+      key:{name:key.name, vfKey:key.vfKey, pc:key.pc, accidentals:key.acc},
+      clef:clef, tempoBpm:tempo, barCount:barCount, difficulty:d,
+      bars:barsArr, spellTable:spellTable
+    };
+  }
+
+  // ================= RENDERING (VexFlow) =================
+  var UNIT_TO_DUR = {1:"16", 2:"8", 4:"q", 8:"h", 16:"w"};
+
+  function renderSong(sng){
+    var wrap = $("notationWrap");
+    var canvasEl = $("notationCanvas"), hlEl = $("highlightCanvas");
+    var canvasWidth = Math.max(360, wrap.clientWidth - 20);
+    var MIN_BAR = 170;
+    var barsPerRow = Math.max(2, Math.floor(canvasWidth/MIN_BAR));
+    var rows = Math.ceil(sng.barCount/barsPerRow);
+    var rowH = 140, topMargin = 40;
+    var totalH = rows*rowH + topMargin;
+
+    canvasEl.width = canvasWidth; canvasEl.height = totalH;
+    hlEl.width = canvasWidth; hlEl.height = totalH;
+    canvasEl.style.width = canvasWidth+"px"; canvasEl.style.height = totalH+"px";
+    hlEl.style.width = canvasWidth+"px"; hlEl.style.height = totalH+"px";
+
+    var renderer = new Vex.Flow.Renderer(canvasEl, Vex.Flow.Renderer.Backends.CANVAS);
+    renderer.resize(canvasWidth, totalH);
+    var ctx = renderer.getContext();
+    var ink = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || "#211C14";
+    ctx.setFillStyle(ink); ctx.setStrokeStyle(ink);
+    ctx.clear();
+
+    var barW = canvasWidth/barsPerRow;
+    var flat = []; // one entry per StaveNote piece, in draw order
+    var attacks = []; // one entry per audio/highlight attack
+    var unitCursor = 0;
+
+    for(var i=0;i<sng.barCount;i++){
+      var rowIdx = Math.floor(i/barsPerRow), colIdx = i%barsPerRow;
+      var x = colIdx*barW, y = topMargin + rowIdx*rowH;
+      var stave = new Vex.Flow.Stave(x, y, barW);
+      if(colIdx===0){
+        stave.addClef(sng.clef);
+        stave.addKeySignature(sng.key.vfKey);
+      }
+      if(i===0){
+        stave.setTempo({duration:"q", dots:0, bpm:sng.tempoBpm}, 0);
+      }
+      stave.setContext(ctx).draw();
+
+      var bar = sng.bars[i];
+      var vfNotes = [], beamable = [];
+      bar.notes.forEach(function(n){
+        var firstBox = null;
+        n.writtenAs.forEach(function(u, wi){
+          var dur = UNIT_TO_DUR[u];
+          var vfNote;
+          if(n.type==="rest"){
+            vfNote = new Vex.Flow.StaveNote({clef:sng.clef, keys:["b/4"], duration:dur+"r"});
+          }else{
+            var sp = sng.spellTable[((n.midi%12)+12)%12];
+            var keyStr = vfKeyString(n.midi, sp.letter, sp.acc);
+            vfNote = new Vex.Flow.StaveNote({clef:sng.clef, keys:[keyStr], duration:dur});
+            if(u===2 || u===1) beamable.push(vfNote);
+          }
+          vfNotes.push(vfNote);
+          flat.push({vfNote:vfNote, internalTieNext: n.writtenAs.length>1 && wi===0, tieToNext: wi===n.writtenAs.length-1 && !!n.tieToNext});
+          if(wi===0) firstBox = vfNote;
+        });
+        if(!n.tiedFromPrev){
+          attacks.push({midi:n.type==="note"?n.midi:null, isRest:n.type==="rest", startUnits:unitCursor, dur:n.dur, vfNote:firstBox});
+        }
+        unitCursor += n.dur;
+      });
+
+      var voice = new Vex.Flow.Voice({num_beats:4, beat_value:4});
+      voice.addTickables(vfNotes);
+      Vex.Flow.Accidental.applyAccidentals([voice], sng.key.vfKey);
+      var formatter = new Vex.Flow.Formatter();
+      formatter.joinVoices([voice]).format([voice], Math.max(60, barW-24));
+      voice.draw(ctx, stave);
+
+      if(beamable.length){
+        try{
+          var beams = Vex.Flow.Beam.generateBeams(beamable);
+          beams.forEach(function(b){ b.setContext(ctx).draw(); });
+        }catch(e){}
+      }
+    }
+
+    for(var k=0;k<flat.length;k++){
+      var m = flat[k];
+      if((m.internalTieNext || m.tieToNext) && flat[k+1]){
+        try{
+          var tie = new Vex.Flow.StaveTie({first_note:m.vfNote, last_note:flat[k+1].vfNote});
+          tie.setContext(ctx).draw();
+        }catch(e){}
+      }
+    }
+
+    attacks.forEach(function(a){
+      try{
+        var bb = a.vfNote.getBoundingBox();
+        a.box = {x:bb.x, y:bb.y, w:bb.w, h:bb.h};
+      }catch(e){ a.box = null; }
+    });
+
+    sng.attacks = attacks;
+    sng.totalUnits = sng.barCount*16;
+  }
+
+  // ================= AUDIO =================
+  var actx=null, master=null, lp=null, noteBus=null;
+  var playing=false, scheduler=null, rafId=null;
+  var stepCounter=0, nextStepTime=0, attackCursor=0;
+  var playhead=[], live=[];
+
+  function ensureAudio(){
+    if(actx) return;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    actx = new AC();
+    master = actx.createGain(); master.gain.value = 0.55;
+    lp = actx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=1600; lp.Q.value=0.5;
+    noteBus = actx.createGain(); noteBus.gain.value=1;
+    noteBus.connect(lp); lp.connect(master); master.connect(actx.destination);
+  }
+  function mtof(m){ return 440*Math.pow(2,(m-69)/12); }
+  function playNote(freq, t, dur){
+    var o1=actx.createOscillator(); o1.type="triangle"; o1.frequency.value=freq;
+    var o2=actx.createOscillator(); o2.type="sine"; o2.frequency.value=freq/2;
+    var sub=actx.createGain(); sub.gain.value=0.45;
+    var g=actx.createGain();
+    o1.connect(g); o2.connect(sub); sub.connect(g); g.connect(noteBus);
+    var peak=0.26, atk=Math.min(0.02,dur*0.25);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(peak,t+atk);
+    g.gain.exponentialRampToValueAtTime(peak*0.75, t+atk+Math.min(0.16,dur*0.6));
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o1.start(t); o2.start(t);
+    var end=t+dur+0.05;
+    o1.stop(end); o2.stop(end);
+    live.push(o1,o2);
+    o1.onended=function(){
+      var k=live.indexOf(o1); if(k>-1) live.splice(k,1);
+      k=live.indexOf(o2); if(k>-1) live.splice(k,1);
+    };
+  }
+
+  function schedule(){
+    if(!playing || !actx || !song) return;
+    var spb = 60/(+tempoEl.value);
+    var s16 = spb/4;
+    while(nextStepTime < actx.currentTime + 0.12){
+      if(stepCounter >= song.totalUnits){
+        playhead.push({t:nextStepTime, done:true});
+        clearInterval(scheduler); scheduler=null;
+        return;
+      }
+      var att = song.attacks[attackCursor];
+      if(att && att.startUnits===stepCounter){
+        if(!att.isRest) playNote(mtof(att.midi), nextStepTime, att.dur*s16*1.05);
+        playhead.push({t:nextStepTime, box:att.box});
+        attackCursor++;
+      }
+      stepCounter++;
+      nextStepTime += s16;
+    }
+  }
+  function paintHighlight(box){
+    var hc = $("highlightCanvas").getContext("2d");
+    hc.clearRect(0,0,hc.canvas.width,hc.canvas.height);
+    if(!box) return;
+    hc.fillStyle = "rgba(198,123,58,0.30)";
+    hc.fillRect(box.x-4, box.y-6, box.w+8, box.h+12);
+  }
+  function renderLoop(){
+    if(actx){
+      var now=actx.currentTime;
+      while(playhead.length && playhead[0].t<=now+0.001){
+        var ev=playhead.shift();
+        if(ev.done){ stopPlayback(); return; }
+        paintHighlight(ev.box);
+      }
+    }
+    if(playing) rafId=requestAnimationFrame(renderLoop);
+  }
+  function hardStopNodes(){
+    live.slice().forEach(function(n){ try{ n.stop(); }catch(e){} });
+    live.length=0;
+  }
+  function setPlayUI(on){
+    playBtn.classList.toggle("playing", on);
+    playBtn.setAttribute("aria-pressed", on?"true":"false");
+    playLabel.textContent = on?"Stop":"Play";
+    playBtn.querySelector(".glyph").innerHTML = on?"&#9632;":"&#9654;";
+    consoleEl.classList.toggle("locked", on);
+    genBtn.disabled = on;
+  }
+  function startPlayback(){
+    if(!song) return;
+    ensureAudio();
+    if(actx.state==="suspended") actx.resume();
+    stepCounter=0; attackCursor=0;
+    nextStepTime = actx.currentTime+0.15;
+    playhead=[];
+    playing=true;
+    setPlayUI(true);
+    schedule();
+    scheduler=setInterval(schedule,25);
+    rafId=requestAnimationFrame(renderLoop);
+  }
+  function stopPlayback(){
+    playing=false;
+    if(scheduler){ clearInterval(scheduler); scheduler=null; }
+    if(rafId){ cancelAnimationFrame(rafId); rafId=null; }
+    playhead=[];
+    if(actx){
+      master.gain.cancelScheduledValues(actx.currentTime);
+      hardStopNodes();
+    }
+    paintHighlight(null);
+    setPlayUI(false);
+  }
+
+  // ================= ELEMENTS =================
+  var consoleEl=$("console");
+  var diffEl=$("diff"), diffVal=$("diffVal"), diffTier=$("diffTier");
+  var tempoEl=$("tempo"), tempoVal=$("tempoVal");
+  var barsMinus=$("barsMinus"), barsPlus=$("barsPlus"), barsVal=$("barsVal");
+  var genBtn=$("genBtn"), playBtn=$("playBtn"), playLabel=$("playLabel"), pngBtn=$("pngBtn");
+  var advToggle=$("advToggle"), advPanel=$("advPanel"), advReset=$("advReset");
+  var kRest=$("k-rest"), kSync=$("k-sync"), kLeap=$("k-leap"), kAcc=$("k-acc"), kKeycx=$("k-keycx");
+  var kRestVal=$("k-rest-val"), kSyncVal=$("k-sync-val"), kLeapVal=$("k-leap-val"), kAccVal=$("k-acc-val"), kKeycxVal=$("k-keycx-val");
+  var keyRow=$("keyRow"), genInfo=$("genInfo"), themeBtn=$("themeBtn");
+
+  var barsCount = 8;
+  var song = null;
+
+  // ---- build key chip row ----
+  KEY_NAMES.forEach(function(name){
+    var id = "key-"+name;
+    var wrapEl = document.createElement("span");
+    var input = document.createElement("input");
+    input.type="checkbox"; input.id=id; input.checked=true;
+    var label = document.createElement("label");
+    label.setAttribute("for", id);
+    label.textContent = name.replace("b","♭");
+    wrapEl.appendChild(input); wrapEl.appendChild(label);
+    keyRow.appendChild(wrapEl);
+    input.addEventListener("change", function(){
+      chips[name] = input.checked;
+      chipsTouched = true;
+      store("sr-keychips", JSON.stringify(chips));
+      store("sr-chipstouched", "1");
+    });
+  });
+  function refreshChipUI(){
+    KEY_NAMES.forEach(function(name){
+      var el = $("key-"+name);
+      if(el) el.checked = !!chips[name];
+    });
+  }
+
+  var KEYCX_LABELS = ["≤1♯/♭","≤2♯/♭","≤3♯/♭","≤4♯/♭","≤6♯/♭"];
+
+  function refreshAdvancedUI(){
+    var d = +diffEl.value;
+    diffVal.textContent = d;
+    diffTier.textContent = difficultyLabel(d);
+    if(!chipsTouched){ syncChipsToAuto(d); refreshChipUI(); }
+
+    if(knobs.restProb.auto) kRest.value = Math.round(restProbAuto(d)*100);
+    if(knobs.syncProb.auto) kSync.value = Math.round(syncProbAuto(d)*100);
+    if(knobs.leapProb.auto) kLeap.value = Math.round(leapProbAuto(d)*100);
+    if(knobs.accidentalProb.auto) kAcc.value = Math.round(accidentalProbAuto(d)*100);
+    if(knobs.keyComplexity.auto) kKeycx.value = keyComplexityIdxAuto(d);
+    kRestVal.textContent = kRest.value;
+    kSyncVal.textContent = kSync.value;
+    kLeapVal.textContent = kLeap.value;
+    kAccVal.textContent = kAcc.value;
+    kKeycxVal.textContent = KEYCX_LABELS[+kKeycx.value];
+  }
+
+  function wireKnob(el, valEl, name, fromUI){
+    el.addEventListener("input", function(){
+      knobs[name].auto = false;
+      knobs[name].value = fromUI(+el.value);
+      valEl.textContent = name==="keyComplexity" ? KEYCX_LABELS[+el.value] : el.value;
+      store("sr-knobs", JSON.stringify(knobs));
+      if(!chipsTouched && name==="keyComplexity") { syncChipsToAuto(+diffEl.value); refreshChipUI(); }
+    });
+  }
+  wireKnob(kRest, kRestVal, "restProb", function(v){ return v/100; });
+  wireKnob(kSync, kSyncVal, "syncProb", function(v){ return v/100; });
+  wireKnob(kLeap, kLeapVal, "leapProb", function(v){ return v/100; });
+  wireKnob(kAcc, kAccVal, "accidentalProb", function(v){ return v/100; });
+  wireKnob(kKeycx, kKeycxVal, "keyComplexity", function(v){ return v; });
+
+  advToggle.addEventListener("click", function(){
+    var open = advPanel.hidden;
+    advPanel.hidden = !open;
+    advToggle.setAttribute("aria-expanded", open?"true":"false");
+    advToggle.innerHTML = open ? "Advanced &#9662;" : "Advanced &#9656;";
+  });
+  advReset.addEventListener("click", function(){
+    Object.keys(knobs).forEach(function(n){ knobs[n].auto = true; });
+    chipsTouched = false;
+    store("sr-knobs", JSON.stringify(knobs));
+    store("sr-chipstouched", "0");
+    refreshAdvancedUI();
+  });
+
+  diffEl.addEventListener("input", function(){
+    store("sr-difficulty", diffEl.value);
+    refreshAdvancedUI();
+  });
+
+  document.querySelectorAll('input[name="clef"]').forEach(function(r){
+    r.addEventListener("change", function(){ store("sr-clef", r.value); });
+  });
+
+  tempoEl.addEventListener("input", function(){
+    tempoVal.textContent = tempoEl.value;
+    store("sr-tempo", tempoEl.value);
+    if(song){ song.tempoBpm = +tempoEl.value; renderSong(song); }
+  });
+
+  function setBars(v){
+    barsCount = clamp(v,4,20);
+    barsVal.textContent = barsCount;
+    store("sr-bars", barsCount);
+    barsMinus.disabled = barsCount<=4;
+    barsPlus.disabled = barsCount>=20;
+  }
+  barsMinus.addEventListener("click", function(){ setBars(barsCount-4); });
+  barsPlus.addEventListener("click", function(){ setBars(barsCount+4); });
+
+  function doGenerate(){
+    if(playing) stopPlayback();
+    song = generateSong();
+    renderSong(song);
+    genInfo.textContent = song.key.name.replace("b","♭")+" major · "+song.tempoBpm+" BPM · "+song.barCount+" bars";
+  }
+  genBtn.addEventListener("click", doGenerate);
+  playBtn.addEventListener("click", function(){
+    if(playing) stopPlayback(); else startPlayback();
+  });
+  pngBtn.addEventListener("click", function(){
+    if(!song) return;
+    var a = document.createElement("a");
+    a.download = "sight-reading-"+song.key.name+"-"+song.barCount+"bars.png";
+    a.href = $("notationCanvas").toDataURL("image/png");
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  });
+
+  window.addEventListener("resize", function(){
+    if(song) renderSong(song);
+  });
+
+  // ---- theme ----
+  function applyTheme(t){
+    if(t==="light" || t==="dark") document.documentElement.setAttribute("data-theme", t);
+    else document.documentElement.removeAttribute("data-theme");
+  }
+  themeBtn.addEventListener("click", function(){
+    var cur = document.documentElement.getAttribute("data-theme");
+    var next = cur==="dark" ? "light" : "dark";
+    applyTheme(next); store("theme", next);
+    if(song) renderSong(song);
+  });
+
+  // ---- restore ----
+  (function restore(){
+    var t = recall("theme"); if(t) applyTheme(t);
+    var c = recall("sr-clef");
+    if(c){ var el=document.querySelector('input[name="clef"][value="'+c+'"]'); if(el) el.checked=true; }
+    var dv = recall("sr-difficulty"); if(dv && +dv>=1 && +dv<=100) diffEl.value = dv;
+    var tv = recall("sr-tempo"); if(tv && +tv>=40 && +tv<=160){ tempoEl.value = tv; tempoVal.textContent = tv; }
+    var bv = recall("sr-bars"); if(bv && +bv>=4 && +bv<=20) barsCount = +bv;
+    var kn = recall("sr-knobs");
+    if(kn){ try{ var parsed=JSON.parse(kn); Object.keys(parsed).forEach(function(n){ if(knobs[n]) knobs[n]=parsed[n]; }); }catch(e){} }
+    var ct = recall("sr-chipstouched");
+    if(ct==="1"){
+      chipsTouched = true;
+      var kc = recall("sr-keychips");
+      if(kc){ try{ var pc=JSON.parse(kc); KEY_NAMES.forEach(function(n){ if(pc.hasOwnProperty(n)) chips[n]=pc[n]; }); }catch(e){} }
+    }
+  })();
+
+  setBars(barsCount);
+  refreshAdvancedUI();
+  doGenerate();
+})();
+</script>
+</body>
+</html>
