@@ -137,7 +137,7 @@
   .dial.idle #hl{opacity:.32}
   #pointer{
     fill:var(--amber);
-    transform-box:fill-box;transform-origin:center;
+    transform-box:view-box;transform-origin:170px 170px;
     transition:rotate .38s cubic-bezier(.4,0,.2,1);
   }
   .dial.idle #pointer{opacity:.4}
@@ -375,7 +375,7 @@
           <circle class="ring-track" cx="170" cy="170" r="150"></circle>
           <circle id="hl" cx="170" cy="40" r="19"></circle>
           <g id="ring"></g>
-          <path id="pointer" d="M170 78 L177 128 L163 128 Z"></path>
+          <path id="pointer" d="M170 70 L177 120 L163 120 Z"></path>
         </svg>
         <div class="dial-center">
           <div class="dc-key" id="dcKey">C</div>
@@ -435,6 +435,18 @@
       </div>
 
       <div class="grp">
+        <span class="grp-label">Lead-in</span>
+        <div class="slider-row loop-row">
+          <div class="stepper">
+            <button type="button" id="leadMinus" aria-label="Fewer lead-in bars">&minus;</button>
+            <span class="val" id="leadVal">1</span>
+            <button type="button" id="leadPlus" aria-label="More lead-in bars">+</button>
+          </div>
+          <span class="estimate" id="leadNote"></span>
+        </div>
+      </div>
+
+      <div class="grp">
         <span class="grp-label">Times around the circle</span>
         <div class="slider-row loop-row">
           <div class="stepper">
@@ -466,8 +478,9 @@
     Each pass plays every key in fourths. Drone holds the tonic for a bar; scales and modes run
     an octave up and back down; arpeggios do the same with the chord tones, up to the octave and
     back. With inversions on, each arpeggio walks through every inversion &mdash; a bar each &mdash; then a
-    closing root position an octave up. Each key gets as many bars as its line needs. Nothing is
-    recorded or sent anywhere; the sound is generated live in your browser.
+    closing root position an octave up. Each key gets as many bars as its line needs. Set a
+    lead-in for a few bars of click before the first note. Nothing is recorded or sent anywhere;
+    the sound is generated live in your browser.
   </footer>
 </div>
 
@@ -481,7 +494,7 @@
   var APPROX = String.fromCharCode(0x2248); // almost-equal sign
   var KEYS = [
     {n:"C",pc:0},{n:"F",pc:5},{n:"B"+FLAT,pc:10},{n:"E"+FLAT,pc:3},
-    {n:"A"+FLAT,pc:8},{n:"D"+FLAT,pc:1},{n:"G"+FLAT,pc:6},{n:"B",pc:11},
+    {n:"A"+FLAT,pc:8},{n:"D"+FLAT,pc:1},{n:"G"+FLAT,pc:6},{n:"B",pc:11,oct:-12},
     {n:"E",pc:4},{n:"A",pc:9},{n:"D",pc:2},{n:"G",pc:7}
   ];
   // Ascending semitone sets for every playable voicing (root .. octave for the
@@ -536,6 +549,7 @@
   var dcKey=$("dcKey"), dcSub=$("dcSub"), beatsEl=$("beats");
   var bpmEl=$("bpm"), volEl=$("vol"), bpmVal=$("bpmVal"), volVal=$("volVal");
   var loopValEl=$("loopVal"), loopMinus=$("loopMinus"), loopPlus=$("loopPlus");
+  var leadValEl=$("leadVal"), leadMinus=$("leadMinus"), leadPlus=$("leadPlus"), leadNote=$("leadNote");
   var estimateEl=$("estimate"), playBtn=$("play"), playLabel=$("playLabel");
   var completeEl=$("complete"), consoleEl=$("console"), cycleEl=$("cycle");
   var patLbl=$("patLbl"), patNotes=$("patNotes"), themeBtn=$("themeBtn");
@@ -543,6 +557,7 @@
   var invEl=$("inv"), invOpt=$("invOpt");
 
   var loops = 4;
+  var leadIn = 1;   // bars of metronome-only before the loop
 
   // ---- build dial labels + positions ----
   var pos = [];
@@ -719,7 +734,7 @@
     var pl = makePlan(sel);
     var bpm = +bpmEl.value;
     var perLoop = 12 * pl.keyBeats * 60 / bpm;
-    var total = perLoop * loops;
+    var total = perLoop * loops + leadIn * 4 * 60 / bpm;
     estimateEl.innerHTML = APPROX + " <b>" + fmtTime(total) + "</b> total " + MIDDOT + " " +
       fmtTime(perLoop) + " per lap";
     bpmVal.textContent = bpm;
@@ -727,6 +742,11 @@
     loopValEl.textContent = loops;
     loopMinus.disabled = playing || loops<=1;
     loopPlus.disabled = playing || loops>=24;
+    leadValEl.textContent = leadIn;
+    leadMinus.disabled = playing || leadIn<=0;
+    leadPlus.disabled = playing || leadIn>=8;
+    leadNote.textContent = leadIn === 0 ? "starts right away"
+      : leadIn + (leadIn === 1 ? " bar" : " bars") + " of metronome first";
     if(!playing){
       dcSub.textContent = sel.label;
       buildBeatDots(pl.beatsPerBar);
@@ -777,7 +797,8 @@
     if(sustain){
       g.gain.linearRampToValueAtTime(peak*0.82, t + dur*0.7);
     }else{
-      g.gain.exponentialRampToValueAtTime(peak*0.5, t + atk + Math.min(0.1, dur*0.5));
+      // hold most of the note's level so it connects to the next one
+      g.gain.exponentialRampToValueAtTime(peak*0.75, t + atk + Math.min(0.16, dur*0.6));
     }
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
 
@@ -822,21 +843,37 @@
     var sEighth = spb * 0.5;
     var drone = cfg.mode === "drone";
     var barSteps = cfg.stepsPerBar;
+    var lead = cfg.leadSteps;                       // 8 eighth-steps per lead-in bar
+    var totalSteps = lead + cfg.loops * cfg.loopLen;
 
     while(nextStepTime < ctx.currentTime + 0.12){
-      if(stepCounter >= cfg.loops * cfg.loopLen){
+      if(stepCounter >= totalSteps){
         playhead.push({t:nextStepTime, done:true});
         clearInterval(scheduler); scheduler = null;
         return;
       }
-      var p = stepCounter % cfg.loopLen;
-      var loopNo = Math.floor(stepCounter / cfg.loopLen);
+
+      if(stepCounter < lead){
+        // lead-in: metronome only, four beats to a bar
+        var lb = stepCounter % 8;
+        if(lb % 2 === 0){
+          clickAt(nextStepTime, lb === 0);
+          playhead.push({t:nextStepTime, leadIn:true, leadBar:Math.floor(stepCounter/8), leadBeat:lb/2});
+        }
+        stepCounter++;
+        nextStepTime += sEighth;
+        continue;
+      }
+
+      var s = stepCounter - lead;
+      var p = s % cfg.loopLen;
+      var loopNo = Math.floor(s / cfg.loopLen);
       var ki = Math.floor(p / cfg.stepsPerKey);
       var sik = p % cfg.stepsPerKey;          // eighth-note index within the key
       var bar = Math.floor(sik / barSteps);   // which bar / inversion
       var sib = sik % barSteps;               // eighth-note index within the bar
       var onBeat = (sib % 2) === 0;
-      var tonic = 48 + KEYS[ki].pc;
+      var tonic = 48 + KEYS[ki].pc + (KEYS[ki].oct || 0);
 
       if(onBeat) clickAt(nextStepTime, sib === 0);
 
@@ -844,7 +881,7 @@
         if(sik === 0) playNote(mtof(tonic), nextStepTime, cfg.bpk * spb, true);
       }else{
         var seq = cfg.pl.bars[bar].seq;
-        if(sib < seq.length) playNote(mtof(tonic + seq[sib]), nextStepTime, sEighth * 0.9, false);
+        if(sib < seq.length) playNote(mtof(tonic + seq[sib]), nextStepTime, sEighth * 1.02, false);
       }
 
       if(onBeat) playhead.push({t:nextStepTime, ki:ki, loopNo:loopNo, bar:bar, bik:sib/2});
@@ -853,13 +890,23 @@
     }
   }
 
-  var shownKey = -1, shownBar = -1;
+  var shownKey = -1, shownBar = -1, shownLeadBar = -3;
   function renderLoop(){
     if(ctx){
       var now = ctx.currentTime;
       while(playhead.length && playhead[0].t <= now + 0.001){
         var ev = playhead.shift();
         if(ev.done){ finish(); return; }
+        if(ev.leadIn){
+          if(shownLeadBar === -2){ buildBeatDots(4); setActive(0); }
+          paintBeat(ev.leadBeat);
+          if(ev.leadBar !== shownLeadBar){
+            dcSub.textContent = "Lead-in " + (ev.leadBar + 1) + " / " + cfg.leadBars;
+            shownLeadBar = ev.leadBar;
+          }
+          continue;
+        }
+        if(shownLeadBar >= 0){ buildBeatDots(cfg.bpk); shownLeadBar = -3; }
         setActive(ev.ki);
         paintBeat(ev.bik);
         dcSub.textContent = "Lap " + (ev.loopNo+1) + " / " + cfg.loops;
@@ -884,10 +931,12 @@
       .forEach(function(r){ r.disabled = on; });
     loopMinus.disabled = on || loops<=1;
     loopPlus.disabled = on || loops>=24;
+    leadMinus.disabled = on || leadIn<=0;
+    leadPlus.disabled = on || leadIn>=8;
   }
 
   function resetIdle(){
-    shownKey = -1; shownBar = -1;
+    shownKey = -1; shownBar = -1; shownLeadBar = -3;
     var sel = readSelection();
     setActive(0);
     dcSub.textContent = sel.label;
@@ -905,17 +954,20 @@
     cfg = {
       mode:sel.id, sel:sel, pl:pl,
       bpk:pl.beatsPerBar, stepsPerBar:pl.stepsPerBar,
-      stepsPerKey:pl.stepsPerKey, loopLen:12*pl.stepsPerKey, loops:loops
+      stepsPerKey:pl.stepsPerKey, loopLen:12*pl.stepsPerKey, loops:loops,
+      leadBars:leadIn, leadSteps:leadIn * 8
     };
     stepCounter = 0;
     nextStepTime = ctx.currentTime + 0.15;
     playhead = [];
     shownKey = -1; shownBar = -1;
+    shownLeadBar = leadIn > 0 ? -2 : -3;
     playing = true;
-    buildBeatDots(cfg.bpk);
+    buildBeatDots(leadIn > 0 ? 4 : cfg.bpk);
     setPlayUI(true);
     setActive(0);
     showPlaying(0, 0);
+    if(leadIn > 0) dcSub.textContent = "Lead-in 1 / " + leadIn;
     schedule();
     scheduler = setInterval(schedule, 25);
     rafId = requestAnimationFrame(renderLoop);
@@ -986,6 +1038,14 @@
     if(playing) return;
     loops = Math.min(24, loops+1); store("loops", loops); refresh();
   });
+  leadMinus.addEventListener("click", function(){
+    if(playing) return;
+    leadIn = Math.max(0, leadIn-1); store("leadin", leadIn); refresh();
+  });
+  leadPlus.addEventListener("click", function(){
+    if(playing) return;
+    leadIn = Math.min(8, leadIn+1); store("leadin", leadIn); refresh();
+  });
 
   document.addEventListener("keydown", function(e){
     if(e.code === "Space"){
@@ -1016,6 +1076,7 @@
     var b = recall("bpm"); if(b && +b>=40 && +b<=200) bpmEl.value = b;
     var v = recall("vol"); if(v!==null && +v>=0 && +v<=100) volEl.value = v;
     var l = recall("loops"); if(l && +l>=1 && +l<=24) loops = +l;
+    var li = recall("leadin"); if(li !== null && +li>=0 && +li<=8) leadIn = +li;
 
     // migrate the old single "mode" key from before Scale/Mode were split out
     if(!recall("cat")){
