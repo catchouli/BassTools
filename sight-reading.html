@@ -87,6 +87,7 @@
   .wordmark{
     font-family:"Fraunces","Georgia",serif;
     font-weight:900;font-size:25px;letter-spacing:-.01em;
+    color:inherit;text-decoration:none;
   }
   .wordmark b{font-weight:900;color:var(--amber)}
   .tagline{
@@ -280,17 +281,16 @@
   <header class="top">
     <div class="brand">
       <span class="lamp" aria-hidden="true"></span>
-      <span class="wordmark">Bass<b>Tools</b></span>
+      <a class="wordmark" href="index.html">Bass<b>Tools</b></a>
       <span class="tagline">Bass practice tools</span>
     </div>
     <button class="theme-btn" id="themeBtn" type="button">Theme</button>
   </header>
 
   <p class="lede">
-    <strong>Sight Reading Practice.</strong> Generates a fresh, playable line every time &mdash;
-    never the same one twice, and never AI-written &mdash; using chord progressions, a difficulty-tiered
-    rhythm library, and voice-leading rules running entirely in your browser. Pick an instrument and a
-    difficulty, press Generate, and read.
+    <strong>Sight Reading Practice.</strong> Generates a fresh, playable line every time
+    &mdash; chord progressions, a difficulty-tiered rhythm library, and voice-leading rules,
+    all running in your browser. Pick an instrument and a difficulty, press Generate, and read.
   </p>
 
   <div class="console" id="console">
@@ -389,10 +389,22 @@
       </div>
 
       <div class="grp">
-        <span class="grp-label">Tempo</span>
+        <span class="grp-label">
+          Tempo
+          <button class="disclosure" id="volToggle" type="button" aria-expanded="false">Volume &#9656;</button>
+        </span>
         <div class="slider-row">
           <input type="range" id="tempo" min="40" max="160" step="1" value="88" aria-label="Beats per minute">
           <span class="readout"><span id="tempoVal">88</span> <small>BPM</small></span>
+        </div>
+        <div class="adv-panel" id="volPanel" hidden>
+          <div class="grp">
+            <span class="grp-label">Note volume</span>
+            <div class="slider-row">
+              <input type="range" id="k-vol" min="0" max="100" step="1" value="100" aria-label="Note volume">
+              <span class="readout"><span id="k-vol-val">100</span>%</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -434,10 +446,10 @@
   </div>
 
   <footer>
-    Every line is generated fresh by a rules-based algorithm running in your browser &mdash; a chord
+    Every line comes from a rules-based algorithm running in your browser &mdash; a chord
     progression, a difficulty-tiered rhythm library, and voice-leading rules over the randomized
-    key &mdash; never a fixed catalogue and never AI-written. Right-click the notation to save it as an
-    image, or use the Download PNG button. Nothing is recorded or sent anywhere.
+    key. Right-click the notation to save it as an image, or use the Download PNG button.
+    Nothing is recorded or sent anywhere.
   </footer>
 </div>
 
@@ -1062,26 +1074,38 @@
   var stepCounter=0, nextStepTime=0, attackCursor=0, clickCursor=0, cursorStepIdx=0;
   var playhead=[], live=[];
 
+  // Note volume slider is 0-100%, where 100% is double the original fixed
+  // level (the metronome click bypasses this bus entirely, connecting
+  // straight to master, which is why notes needed the boost to match it).
+  function noteVolumeGain(){ return (+volEl.value/100) * 2; }
   function ensureAudio(){
     if(actx) return;
     var AC = window.AudioContext || window.webkitAudioContext;
     actx = new AC();
     master = actx.createGain(); master.gain.value = 0.55;
     lp = actx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=1600; lp.Q.value=0.5;
-    noteBus = actx.createGain(); noteBus.gain.value=1;
+    noteBus = actx.createGain(); noteBus.gain.value=noteVolumeGain();
     noteBus.connect(lp); lp.connect(master); master.connect(actx.destination);
   }
   function mtof(m){ return 440*Math.pow(2,(m-69)/12); }
-  function playNote(freq, t, dur){
+  function playNote(freq, t, dur, legato){
     var o1=actx.createOscillator(); o1.type="triangle"; o1.frequency.value=freq;
     var o2=actx.createOscillator(); o2.type="sine"; o2.frequency.value=freq/2;
     var sub=actx.createGain(); sub.gain.value=0.45;
     var g=actx.createGain();
     o1.connect(g); o2.connect(sub); sub.connect(g); g.connect(noteBus);
     var peak=0.26, atk=Math.min(0.02,dur*0.25);
+    // Legato needs an actual sustained plateau, not just a longer duration:
+    // the old envelope started decaying toward silence ~0.16s after the
+    // attack regardless of dur, so a "longer" note was really just a
+    // slower fade-out -- audibly gone well before the next note began.
+    // Hold near peak until just before the note ends, then a short release.
+    var release = legato ? Math.min(0.05,dur*0.3) : Math.min(0.16,dur*0.6);
+    var sustainLevel = legato ? peak*0.9 : peak*0.75;
+    var releaseStart = Math.max(t+atk, t+dur-release);
     g.gain.setValueAtTime(0.0001,t);
     g.gain.exponentialRampToValueAtTime(peak,t+atk);
-    g.gain.exponentialRampToValueAtTime(peak*0.75, t+atk+Math.min(0.16,dur*0.6));
+    g.gain.exponentialRampToValueAtTime(sustainLevel, releaseStart);
     g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
     o1.start(t); o2.start(t);
     var end=t+dur+0.05;
@@ -1134,8 +1158,11 @@
         var att = song.attacks[attackCursor];
         if(att && att.startUnits===stepCounter){
           if(!att.isRest){
-            var artFactor = legatoToggle.checked ? 1.08 : 0.55;
-            playNote(mtof(att.midi), nextStepTime, Math.max(att.ringUnits*s16*artFactor, s16*0.5));
+            var legato = legatoToggle.checked;
+            // Legato: ring for exactly the time available until the next
+            // note/rest begins. Staccato: cut that short, leaving a gap.
+            var noteDur = legato ? att.ringUnits*s16 : att.ringUnits*s16*0.55;
+            playNote(mtof(att.midi), nextStepTime, Math.max(noteDur, s16*0.5), legato);
           }
           attackCursor++;
         }
@@ -1213,6 +1240,7 @@
   var instrumentEl=$("instrument");
   var diffEl=$("diff"), diffVal=$("diffVal"), diffTier=$("diffTier");
   var tempoEl=$("tempo"), tempoVal=$("tempoVal");
+  var volToggle=$("volToggle"), volPanel=$("volPanel"), volEl=$("k-vol"), volVal=$("k-vol-val");
   var barsMinus=$("barsMinus"), barsPlus=$("barsPlus"), barsVal=$("barsVal");
   var leadMinus=$("leadMinus"), leadPlus=$("leadPlus"), leadVal=$("leadVal");
   var genBtn=$("genBtn"), playBtn=$("playBtn"), playLabel=$("playLabel"), pngBtn=$("pngBtn");
@@ -1295,6 +1323,18 @@
     advPanel.hidden = !open;
     advToggle.setAttribute("aria-expanded", open?"true":"false");
     advToggle.innerHTML = open ? "Advanced &#9662;" : "Advanced &#9656;";
+  });
+
+  volToggle.addEventListener("click", function(){
+    var open = volPanel.hidden;
+    volPanel.hidden = !open;
+    volToggle.setAttribute("aria-expanded", open?"true":"false");
+    volToggle.innerHTML = open ? "Volume &#9662;" : "Volume &#9656;";
+  });
+  volEl.addEventListener("input", function(){
+    volVal.textContent = volEl.value;
+    store("sr-vol", volEl.value);
+    if(noteBus) noteBus.gain.value = noteVolumeGain();
   });
   advReset.addEventListener("click", function(){
     Object.keys(knobs).forEach(function(n){ knobs[n].auto = true; });
@@ -1397,6 +1437,7 @@
     if(gt){ var gtEl=document.querySelector('input[name="genType"][value="'+gt+'"]'); if(gtEl) gtEl.checked=true; }
     var dv = recall("sr-difficulty"); if(dv && +dv>=1 && +dv<=100) diffEl.value = dv;
     var tv = recall("sr-tempo"); if(tv && +tv>=40 && +tv<=160){ tempoEl.value = tv; tempoVal.textContent = tv; }
+    var vv = recall("sr-vol"); if(vv!==null && +vv>=0 && +vv<=100){ volEl.value = vv; volVal.textContent = vv; }
     var bv = recall("sr-bars"); if(bv && +bv>=4 && +bv<=20) barsCount = +bv;
     var lv = recall("sr-leadin"); if(lv!==null && +lv>=0 && +lv<=4) leadIn = +lv;
     var mv = recall("sr-metro"); if(mv!==null) metroToggle.checked = mv==="1";
