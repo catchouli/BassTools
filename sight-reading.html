@@ -307,6 +307,14 @@
       </div>
 
       <div class="grp">
+        <span class="grp-label">Generate</span>
+        <div class="choice-row" id="genTypeRow">
+          <input type="radio" name="genType" id="gt-bassline" value="bassline" checked><label for="gt-bassline">Bassline</label>
+          <input type="radio" name="genType" id="gt-melody" value="melody"><label for="gt-melody">Melody</label>
+        </div>
+      </div>
+
+      <div class="grp">
         <span class="grp-label">Keys to include</span>
         <div class="choice-row" id="keyRow"></div>
       </div>
@@ -692,7 +700,12 @@
   }
 
   // ================= GENERATION =================
-  function generateBar(chord, nextChord, groupKinds, d, eff, key, prevMidi, range){
+  // Bassline and melody share the same rhythm-cell and chord-progression
+  // machinery; only the pitch choice differs -- basslines anchor low and
+  // lean hard on chord roots, melodies sit higher, favor thirds/steps over
+  // roots, and lean far more on stepwise motion than leaps.
+  function generateBar(chord, nextChord, groupKinds, d, eff, key, prevMidi, range, genType){
+    var isMelody = genType==="melody";
     var slots = [], groupStartIdx = [];
     groupKinds.forEach(function(kind){
       var cell = kind==="c" ? pickCompoundCell(d, eff) : pickSimpleCell(d, eff);
@@ -703,7 +716,9 @@
       });
     });
 
-    var cursor = prevMidi===null ? range.lowMidi+6 : prevMidi;
+    var cursor = prevMidi!==null ? prevMidi
+      : isMelody ? range.lowMidi + Math.round((range.highMidi-range.lowMidi)*0.55)
+      : range.lowMidi+6;
     var notes = [];
     for(var idx=0; idx<slots.length; idx++){
       var slot = slots[idx];
@@ -716,18 +731,32 @@
       var midi;
       if(strong){
         var r = Math.random();
-        var kind = downbeat
-          ? (r<0.65?"root":(r<0.90?"five":"third"))
-          : (r<0.45?"root":(r<0.75?"five":"third"));
-        midi = nearestOctave(chord.rootPc + tonesOf(chord, kind), cursor);
+        var kind;
+        if(isMelody){
+          kind = downbeat
+            ? (r<0.35?"root":(r<0.70?"third":"five"))
+            : (r<0.30?"root":(r<0.55?"third":(r<0.80?"five":null)));
+        }else{
+          kind = downbeat
+            ? (r<0.65?"root":(r<0.90?"five":"third"))
+            : (r<0.45?"root":(r<0.75?"five":"third"));
+        }
+        if(kind){
+          midi = nearestOctave(chord.rootPc + tonesOf(chord, kind), cursor);
+        }else{
+          // melodic non-chord strong-beat tone (a diatonic step toward the
+          // chord root, giving an appoggiatura-like leaning tone)
+          midi = diatonicStepToward(cursor, nearestOctave(chord.rootPc, cursor), key);
+        }
       }else{
         var isLast = idx===slots.length-1;
         var targetPc = isLast ? nextChord.rootPc : chord.rootPc;
         var target = nearestOctave(targetPc, cursor);
         var r2 = Math.random();
+        var leapP = isMelody ? eff.leapProb*0.35 : eff.leapProb;
         if(r2 < eff.accidentalProb){
           midi = chromaticApproach(target);
-        }else if(r2 < eff.accidentalProb + eff.leapProb){
+        }else if(r2 < eff.accidentalProb + leapP){
           var kinds = ["root","third","five"];
           midi = nearestOctave(chord.rootPc + tonesOf(chord, kinds[Math.floor(Math.random()*3)]), cursor);
         }else{
@@ -776,6 +805,7 @@
   function generateSong(){
     var d = +diffEl.value;
     var instrument = INSTRUMENTS[instrumentEl.value] || INSTRUMENTS.bass4;
+    var genType = (document.querySelector('input[name="genType"]:checked')||{}).value || "bassline";
     var barCount = barsCount;
     var tempo = +tempoEl.value;
     var tsVariety = +kTsig.value;
@@ -798,7 +828,7 @@
     for(var i=0;i<barCount;i++){
       var chord = progression[i];
       var nextChord = progression[(i+1)%barCount];
-      var built = generateBar(chord, nextChord, timeSig.groups, d, eff, key, prevMidi, range);
+      var built = generateBar(chord, nextChord, timeSig.groups, d, eff, key, prevMidi, range, genType);
       barsArr.push({chord:chord, notes:built.notes, groupStartIdx:built.groupStartIdx});
       prevMidi = built.lastMidi;
     }
@@ -806,7 +836,7 @@
 
     return {
       key:{name:key.name, vfKey:key.vfKey, pc:key.pc, accidentals:key.acc},
-      instrument:instrument.id, clef:instrument.clef, tempoBpm:tempo, barCount:barCount, difficulty:d,
+      instrument:instrument.id, clef:instrument.clef, genType:genType, tempoBpm:tempo, barCount:barCount, difficulty:d,
       timeSig:{num:timeSig.num, den:timeSig.den, groups:timeSig.groups},
       bars:barsArr, spellTable:spellTable, eff:eff
     };
@@ -1243,6 +1273,10 @@
     store("sr-instrument", instrumentEl.value);
   });
 
+  document.querySelectorAll('input[name="genType"]').forEach(function(r){
+    r.addEventListener("change", function(){ store("sr-gentype", r.value); });
+  });
+
   kTsig.addEventListener("input", function(){
     kTsigVal.textContent = kTsig.value;
     store("sr-tsig", kTsig.value);
@@ -1272,7 +1306,7 @@
     if(playing) stopPlayback();
     song = generateSong();
     renderSong(song);
-    genInfo.textContent = song.key.name.replace("b","♭")+" major · "+song.timeSig.num+"/"+song.timeSig.den+
+    genInfo.textContent = (song.genType==="melody"?"Melody":"Bassline")+" · "+song.key.name.replace("b","♭")+" major · "+song.timeSig.num+"/"+song.timeSig.den+
       " · "+song.tempoBpm+" BPM · "+song.barCount+" bars · "+INSTRUMENTS[song.instrument].label;
   }
   genBtn.addEventListener("click", doGenerate);
@@ -1282,7 +1316,7 @@
   pngBtn.addEventListener("click", function(){
     if(!song) return;
     var a = document.createElement("a");
-    a.download = "sight-reading-"+song.instrument+"-"+song.key.name+"-"+song.barCount+"bars.png";
+    a.download = "sight-reading-"+song.genType+"-"+song.instrument+"-"+song.key.name+"-"+song.barCount+"bars.png";
     a.href = $("notationCanvas").toDataURL("image/png");
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   });
@@ -1307,6 +1341,8 @@
   (function restore(){
     var t = recall("theme"); if(t) applyTheme(t);
     var iv = recall("sr-instrument"); if(iv && INSTRUMENTS[iv]) instrumentEl.value = iv;
+    var gt = recall("sr-gentype");
+    if(gt){ var gtEl=document.querySelector('input[name="genType"][value="'+gt+'"]'); if(gtEl) gtEl.checked=true; }
     var dv = recall("sr-difficulty"); if(dv && +dv>=1 && +dv<=100) diffEl.value = dv;
     var tv = recall("sr-tempo"); if(tv && +tv>=40 && +tv<=160){ tempoEl.value = tv; tempoVal.textContent = tv; }
     var bv = recall("sr-bars"); if(bv && +bv>=4 && +bv<=20) barsCount = +bv;
