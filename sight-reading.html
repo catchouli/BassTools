@@ -993,11 +993,21 @@
     return osmd;
   }
 
+  // Setting EngravingRules.DefaultColorMusic directly only changes that one
+  // field -- notehead/stem/rest colors are separate fields that only get
+  // updated by calling applyDefaultColorMusic(), which cascades the color to
+  // all of them. Skipping that left noteheads/stems black in dark mode even
+  // though the staff lines (which do read DefaultColorMusic directly) picked
+  // up the theme color correctly.
+  function applyThemeColor(inst){
+    inst.EngravingRules.applyDefaultColorMusic(currentInk());
+  }
+
   function renderSong(sng){
     var inst = ensureOsmd();
     var xml = songToMusicXML(sng);
     return inst.load(xml).then(function(){
-      inst.EngravingRules.DefaultColorMusic = currentInk();
+      applyThemeColor(inst);
       inst.render();
     }).catch(function(err){
       console.error("Notation render failed:", err);
@@ -1006,7 +1016,7 @@
 
   function redrawColors(){
     if(!osmd || !osmd.Sheet) return;
-    osmd.EngravingRules.DefaultColorMusic = currentInk();
+    applyThemeColor(osmd);
     osmd.render();
   }
 
