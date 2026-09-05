@@ -147,22 +147,19 @@
     display:flex;align-items:center;justify-content:space-between;gap:8px;
   }
 
-  .segmented{
-    display:flex;border:1px solid var(--line);border-radius:10px;
-    overflow:hidden;background:var(--panel-2);
+  .select{
+    font-family:"IBM Plex Sans",sans-serif;
+    font-size:13.5px;color:var(--ink);
+    background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+    padding:9px 12px;cursor:pointer;width:100%;
   }
-  .segmented .seg{flex:1}
-  .segmented input{position:absolute;opacity:0;pointer-events:none}
-  .segmented label{
-    display:block;text-align:center;padding:9px 4px;cursor:pointer;
-    font-size:12.5px;white-space:nowrap;color:var(--ink-soft);
-    border-right:1px solid var(--line);
-    transition:background .15s,color .15s;
-  }
-  .segmented .seg:last-child label{border-right:none}
-  .segmented input:checked+label{background:var(--amber);color:#fff;font-weight:600}
-  .segmented input:focus-visible+label{outline:2px solid var(--amber-lit);outline-offset:-3px}
-  .console.locked .segmented label{cursor:not-allowed;opacity:.55}
+  .select:hover{border-color:var(--ink-faint)}
+  .console.locked .select{cursor:not-allowed;opacity:.55;pointer-events:none}
+
+  .check-row{display:flex;align-items:center;gap:9px;cursor:pointer;font-size:13px;color:var(--ink-soft)}
+  .check-row input{width:17px;height:17px;accent-color:var(--amber-lit);cursor:pointer;flex:none}
+  .check-row:hover{color:var(--ink)}
+  .console.locked .check-row{cursor:not-allowed;opacity:.55;pointer-events:none}
 
   .choice-row{display:flex;flex-wrap:wrap;align-items:center;gap:7px}
   .choice-row input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
@@ -283,7 +280,7 @@
   <p class="lede">
     <strong>Sight Reading Practice.</strong> Generates a fresh, playable line every time &mdash;
     never the same one twice, and never AI-written &mdash; using chord progressions, a difficulty-tiered
-    rhythm library, and voice-leading rules running entirely in your browser. Pick a clef and a
+    rhythm library, and voice-leading rules running entirely in your browser. Pick an instrument and a
     difficulty, press Generate, and read.
   </p>
 
@@ -301,11 +298,12 @@
 
     <div class="controls">
       <div class="grp">
-        <span class="grp-label">Clef</span>
-        <div class="segmented">
-          <span class="seg"><input type="radio" name="clef" id="clef-bass" value="bass" checked><label for="clef-bass">Bass</label></span>
-          <span class="seg"><input type="radio" name="clef" id="clef-treble" value="treble"><label for="clef-treble">Treble</label></span>
-        </div>
+        <span class="grp-label">Instrument</span>
+        <select class="select" id="instrument">
+          <option value="bass4">4-String Bass</option>
+          <option value="bass5">5-String Bass</option>
+          <option value="guitar6">6-String Guitar</option>
+        </select>
       </div>
 
       <div class="grp">
@@ -365,6 +363,15 @@
       </div>
 
       <div class="grp">
+        <span class="grp-label">Time signature variety</span>
+        <div class="slider-row">
+          <input type="range" id="k-tsig" min="0" max="100" step="1" value="20" aria-label="Time signature variety">
+          <span class="readout"><span id="k-tsig-val">20</span>%</span>
+        </div>
+        <span class="tier-label">Always 4/4 at 0% &mdash; still mostly 4/4 even at 100%</span>
+      </div>
+
+      <div class="grp">
         <span class="grp-label">Tempo</span>
         <div class="slider-row">
           <input type="range" id="tempo" min="40" max="160" step="1" value="88" aria-label="Beats per minute">
@@ -379,6 +386,10 @@
           <span class="val" id="barsVal">8</span>
           <button type="button" id="barsPlus" aria-label="More bars">+</button>
         </div>
+      </div>
+
+      <div class="grp">
+        <label class="check-row"><input type="checkbox" id="metroToggle" checked><span>Metronome click during playback</span></label>
       </div>
 
       <button class="play" id="genBtn" type="button">
@@ -463,8 +474,8 @@
     return table;
   }
 
-  function vfKeyString(midi, letter, acc){
-    var oct = Math.floor((midi-acc)/12) - 1;
+  function vfKeyString(writtenMidi, letter, acc){
+    var oct = Math.floor((writtenMidi-acc)/12) - 1;
     return letter.toLowerCase() + accStr(acc) + "/" + oct;
   }
 
@@ -495,13 +506,25 @@
     return MAJOR_STEPS.map(function(s){ return (key.pc+s)%12; });
   }
 
-  var LOW = 28; // E1
+  // ================= INSTRUMENTS =================
+  // Both bass and guitar are conventionally notated one octave above their
+  // sounding pitch (that's why a bass's open low E lands on the first ledger
+  // line below the bass staff instead of five ledger lines down). `midi`
+  // fields everywhere in the generator are real/sounding pitch; only the
+  // notation step adds this offset.
+  var WRITTEN_OCTAVE_OFFSET = 12;
+
+  var INSTRUMENTS = {
+    bass4:   {id:"bass4",   label:"4-String Bass",  clef:"bass",   lowMidi:28, highMidi:58}, // E1..B3 sounding
+    bass5:   {id:"bass5",   label:"5-String Bass",  clef:"bass",   lowMidi:23, highMidi:53}, // B0..F3 sounding
+    guitar6: {id:"guitar6", label:"6-String Guitar",clef:"treble", lowMidi:40, highMidi:70}  // E2..Bb4 sounding
+  };
 
   function nearestOctave(pc, near){
     pc = ((pc%12)+12)%12;
-    if(near===null || near===undefined) near = LOW+6;
+    if(near===null || near===undefined) near = 34;
     var best=null, bestDist=Infinity;
-    for(var m=0; m<108; m++){
+    for(var m=0; m<120; m++){
       if(m%12===pc){
         var dist=Math.abs(m-near);
         if(dist<bestDist){ bestDist=dist; best=m; }
@@ -531,43 +554,68 @@
     return chord.tones[i];
   }
 
-  // ================= RHYTHM CELLS =================
-  var CELLS = [
-    {id:"quarters", minDiff:1, tags:[], tokens:[{u:4},{u:4},{u:4},{u:4}]},
-    {id:"half-half", minDiff:21, tags:[], tokens:[{u:8},{u:8}]},
-    {id:"whole", minDiff:21, tags:[], tokens:[{u:16}]},
-    {id:"half-Q-Q", minDiff:21, tags:[], tokens:[{u:8},{u:4},{u:4}]},
-    {id:"Q-Q-half", minDiff:21, tags:[], tokens:[{u:4},{u:4},{u:8}]},
-    {id:"8pair-lead", minDiff:25, tags:[], tokens:[{u:2},{u:2},{u:4},{u:4},{u:4}]},
-    {id:"8pair-mid", minDiff:25, tags:[], tokens:[{u:4},{u:2},{u:2},{u:4},{u:4}]},
-    {id:"8pair-tail", minDiff:25, tags:[], tokens:[{u:4},{u:4},{u:4},{u:2},{u:2}]},
-    {id:"two-8pairs", minDiff:30, tags:[], tokens:[{u:2},{u:2},{u:2},{u:2},{u:4},{u:4}]},
-    {id:"Qrest-1", minDiff:41, tags:["rest"], tokens:[{u:4,rest:true},{u:4},{u:4},{u:4}]},
-    {id:"Qrest-3", minDiff:41, tags:["rest"], tokens:[{u:4},{u:4},{u:4,rest:true},{u:4}]},
-    {id:"eighths-all", minDiff:41, tags:[], tokens:[{u:2},{u:2},{u:2},{u:2},{u:2},{u:2},{u:2},{u:2}]},
-    {id:"8rest-pickup", minDiff:61, tags:["rest"], tokens:[{u:2,rest:true},{u:2},{u:4},{u:4},{u:4}]},
-    {id:"dotted-push", minDiff:61, tags:["sync"], tokens:[{u:4,tie:true},{u:2},{u:2},{u:4},{u:4}]},
-    {id:"tied-8-over-beat", minDiff:65, tags:["sync"], tokens:[{u:4},{u:2},{u:2,tie:true},{u:4},{u:4}]},
-    {id:"tied-backbeat", minDiff:70, tags:["sync"], tokens:[{u:4},{u:4},{u:2,tie:true},{u:2},{u:4}]},
-    {id:"16th-turn", minDiff:81, tags:["sixteenth"], tokens:[{u:4},{u:4},{u:4},{u:1},{u:1},{u:1},{u:1}]},
-    {id:"16th-rest-mix", minDiff:81, tags:["sixteenth","rest"], tokens:[{u:4},{u:4},{u:1,rest:true},{u:1},{u:2},{u:4}]}
+  // ================= TIME SIGNATURES =================
+  // groups: how the bar is built, beamed, and metronome-clicked.
+  // "s" = one simple beat (4 sixteenth-note units, e.g. one quarter-note pulse)
+  // "c" = one compound beat (6 units, e.g. one dotted-quarter pulse in 6/8)
+  var TIME_SIGS = [
+    {num:4, den:4, groups:["s","s","s","s"], tier:0},
+    {num:3, den:4, groups:["s","s","s"], tier:1},
+    {num:2, den:4, groups:["s","s"], tier:1},
+    {num:6, den:8, groups:["c","c"], tier:2},
+    {num:5, den:4, groups:["s","s","s","s","s"], tier:3},
+    {num:7, den:8, groups:["s","s","c"], tier:3}
+  ];
+  function timeSigWeight(ts, variety){
+    if(ts.tier===0) return 14;
+    if(ts.tier===1) return 6*(variety/100);
+    if(ts.tier===2) return 4*Math.max(0,(variety-15)/85);
+    if(ts.tier===3) return 3*Math.max(0,(variety-45)/55);
+    return 0;
+  }
+  function pickTimeSig(variety){
+    var weights = TIME_SIGS.map(function(ts){ return timeSigWeight(ts, variety); });
+    return weightedPick(TIME_SIGS, weights);
+  }
+  function groupUnits(kind){ return kind==="c" ? 6 : 4; }
+
+  // ================= RHYTHM (per-beat cells) =================
+  // Every slot's unit count maps to exactly one nameable (possibly dotted)
+  // written duration -- see UNIT_DURSPEC below -- so syncopation is produced
+  // entirely by tying two adjacent written notes across a beat/bar boundary
+  // (applySyncTies), never by faking one attack out of multiple pieces.
+  var SIMPLE_BEAT_CELLS = [ // sums to 4 units (one simple beat)
+    {id:"s-q",         minDiff:1,  tags:[],             tokens:[{u:4}]},
+    {id:"s-ee",        minDiff:21, tags:[],             tokens:[{u:2},{u:2}]},
+    {id:"s-rest",      minDiff:41, tags:["rest"],       tokens:[{u:4,rest:true}]},
+    {id:"s-rest-e",    minDiff:45, tags:["rest"],       tokens:[{u:2,rest:true},{u:2}]},
+    {id:"s-e-rest",    minDiff:45, tags:["rest"],       tokens:[{u:2},{u:2,rest:true}]},
+    {id:"s-dot8-16",   minDiff:65, tags:["sync"],       tokens:[{u:3},{u:1}]},
+    {id:"s-16-dot8",   minDiff:68, tags:["sync"],       tokens:[{u:1},{u:3}]},
+    {id:"s-ssss",      minDiff:75, tags:["sixteenth"],  tokens:[{u:1},{u:1},{u:1},{u:1}]},
+    {id:"s-s-e-s",     minDiff:78, tags:["sixteenth"],  tokens:[{u:1},{u:2},{u:1}]},
+    {id:"s-e-s-s",     minDiff:78, tags:["sixteenth"],  tokens:[{u:2},{u:1},{u:1}]},
+    {id:"s-s-s-e",     minDiff:78, tags:["sixteenth"],  tokens:[{u:1},{u:1},{u:2}]},
+    {id:"s-rest-sss",  minDiff:82, tags:["rest","sixteenth"], tokens:[{u:1,rest:true},{u:1},{u:1},{u:1}]}
+  ];
+  var COMPOUND_BEAT_CELLS = [ // sums to 6 units (one compound/dotted-quarter beat)
+    {id:"c-dq",        minDiff:1,  tags:[],             tokens:[{u:6}]},
+    {id:"c-eee",       minDiff:1,  tags:[],             tokens:[{u:2},{u:2},{u:2}]},
+    {id:"c-e-q",       minDiff:25, tags:[],             tokens:[{u:2},{u:4}]},
+    {id:"c-q-e",       minDiff:25, tags:[],             tokens:[{u:4},{u:2}]},
+    {id:"c-rest",      minDiff:41, tags:["rest"],       tokens:[{u:6,rest:true}]},
+    {id:"c-rest-ee",   minDiff:45, tags:["rest"],       tokens:[{u:2,rest:true},{u:2},{u:2}]},
+    {id:"c-ee-rest",   minDiff:45, tags:["rest"],       tokens:[{u:2},{u:2},{u:2,rest:true}]},
+    {id:"c-ss-e-e",    minDiff:78, tags:["sixteenth"],  tokens:[{u:1},{u:1},{u:2},{u:2}]},
+    {id:"c-e-ss-e",    minDiff:78, tags:["sixteenth"],  tokens:[{u:2},{u:1},{u:1},{u:2}]}
   ];
 
   function expandCell(tokens){
-    var logical = [], pos = 0;
+    var slots = [];
     for(var i=0;i<tokens.length;i++){
-      var t = tokens[i];
-      if(t.tie){
-        var t2 = tokens[i+1];
-        logical.push({start:pos, units:t.u+t2.u, writtenAs:[t.u,t2.u], rest:false});
-        pos += t.u+t2.u;
-        i++;
-      }else{
-        logical.push({start:pos, units:t.u, writtenAs:[t.u], rest:!!t.rest});
-        pos += t.u;
-      }
+      slots.push({units:tokens[i].u, rest:!!tokens[i].rest});
     }
-    return logical;
+    return slots;
   }
 
   function cellWeight(cell, d, eff){
@@ -584,8 +632,13 @@
     for(var i=0;i<items.length;i++){ r-=weights[i]; if(r<=0) return items[i]; }
     return items[items.length-1];
   }
-  function pickCell(d, eff){
-    var eligible = CELLS.filter(function(c){ return d>=c.minDiff; });
+  function pickSimpleCell(d, eff){
+    var eligible = SIMPLE_BEAT_CELLS.filter(function(c){ return d>=c.minDiff; });
+    var weights = eligible.map(function(c){ return cellWeight(c,d,eff); });
+    return weightedPick(eligible, weights);
+  }
+  function pickCompoundCell(d, eff){
+    var eligible = COMPOUND_BEAT_CELLS.filter(function(c){ return d>=c.minDiff; });
     var weights = eligible.map(function(c){ return cellWeight(c,d,eff); });
     return weightedPick(eligible, weights);
   }
@@ -639,53 +692,80 @@
   }
 
   // ================= GENERATION =================
-  function generateBar(chord, nextChord, cell, d, eff, key, prevMidi){
-    var logical = expandCell(cell.tokens);
-    var rangeHi = LOW + rangeWidthAuto(d);
+  function generateBar(chord, nextChord, groupKinds, d, eff, key, prevMidi, range){
+    var slots = [], groupStartIdx = [];
+    groupKinds.forEach(function(kind){
+      var cell = kind==="c" ? pickCompoundCell(d, eff) : pickSimpleCell(d, eff);
+      var logical = expandCell(cell.tokens);
+      groupStartIdx.push(slots.length);
+      logical.forEach(function(s, si){
+        slots.push({units:s.units, rest:s.rest, groupStart: si===0});
+      });
+    });
+
+    var cursor = prevMidi===null ? range.lowMidi+6 : prevMidi;
     var notes = [];
-    for(var idx=0; idx<logical.length; idx++){
-      var slot = logical[idx];
+    for(var idx=0; idx<slots.length; idx++){
+      var slot = slots[idx];
       if(slot.rest){
-        notes.push({type:"rest", dur:slot.units, writtenAs:slot.writtenAs});
+        notes.push({type:"rest", dur:slot.units});
         continue;
       }
-      var strong = (slot.start % 4)===0;
-      var downbeat = slot.start===0;
+      var strong = slot.groupStart;
+      var downbeat = idx===0;
       var midi;
       if(strong){
         var r = Math.random();
         var kind = downbeat
           ? (r<0.65?"root":(r<0.90?"five":"third"))
           : (r<0.45?"root":(r<0.75?"five":"third"));
-        midi = nearestOctave(chord.rootPc + tonesOf(chord, kind), prevMidi);
+        midi = nearestOctave(chord.rootPc + tonesOf(chord, kind), cursor);
       }else{
-        var isLast = idx===logical.length-1;
+        var isLast = idx===slots.length-1;
         var targetPc = isLast ? nextChord.rootPc : chord.rootPc;
-        var target = nearestOctave(targetPc, prevMidi);
+        var target = nearestOctave(targetPc, cursor);
         var r2 = Math.random();
         if(r2 < eff.accidentalProb){
           midi = chromaticApproach(target);
         }else if(r2 < eff.accidentalProb + eff.leapProb){
           var kinds = ["root","third","five"];
-          midi = nearestOctave(chord.rootPc + tonesOf(chord, kinds[Math.floor(Math.random()*3)]), prevMidi);
+          midi = nearestOctave(chord.rootPc + tonesOf(chord, kinds[Math.floor(Math.random()*3)]), cursor);
         }else{
-          midi = diatonicStepToward(prevMidi===null?target:prevMidi, target, key);
+          midi = diatonicStepToward(cursor, target, key);
         }
       }
-      midi = clampToRange(midi, LOW, rangeHi);
-      notes.push({type:"note", midi:midi, dur:slot.units, writtenAs:slot.writtenAs});
-      prevMidi = midi;
+      midi = clampToRange(midi, range.lowMidi, range.highMidi);
+      notes.push({type:"note", midi:midi, dur:slot.units});
+      cursor = midi;
     }
-    return {notes:notes, lastMidi:prevMidi};
+    return {notes:notes, lastMidi:cursor, groupStartIdx:groupStartIdx};
   }
 
-  function applyCrossBarTies(barsArr, p){
-    for(var i=0;i<barsArr.length-1;i++){
-      var last = barsArr[i].notes[barsArr[i].notes.length-1];
-      var first = barsArr[i+1].notes[0];
-      if(last.type==="note" && first.type==="note" &&
-         last.writtenAs.length===1 && first.writtenAs.length===1 &&
-         Math.random()<p){
+  function applyIntraBarSyncTies(barsArr, eff){
+    barsArr.forEach(function(bar){
+      var notes = bar.notes, starts = bar.groupStartIdx;
+      for(var g=1; g<starts.length; g++){
+        var i = starts[g];
+        var prev = notes[i-1], cur = notes[i];
+        if(prev && cur && prev.type==="note" && cur.type==="note" && !prev.tieToNext && Math.random()<eff.syncProb*0.5){
+          cur.midi = prev.midi;
+          prev.tieToNext = true;
+          cur.tiedFromPrev = true;
+        }
+      }
+    });
+  }
+
+  // Cross-bar ties can only be decided once we know which bars land on the
+  // same printed row (a tie can't visually jump from the end of one line to
+  // the start of the next), so this runs from renderSong after layout,
+  // gated by canTieAfter(barIndex).
+  function applyCrossBarSyncTies(barsArr, eff, canTieAfter){
+    for(var b=0; b<barsArr.length-1; b++){
+      if(!canTieAfter(b)) continue;
+      var last = barsArr[b].notes[barsArr[b].notes.length-1];
+      var first = barsArr[b+1].notes[0];
+      if(last && first && last.type==="note" && first.type==="note" && !last.tieToNext && Math.random()<eff.syncProb*0.4){
         first.midi = last.midi;
         last.tieToNext = true;
         first.tiedFromPrev = true;
@@ -695,125 +775,227 @@
 
   function generateSong(){
     var d = +diffEl.value;
-    var clef = document.querySelector('input[name="clef"]:checked').value;
+    var instrument = INSTRUMENTS[instrumentEl.value] || INSTRUMENTS.bass4;
     var barCount = barsCount;
     var tempo = +tempoEl.value;
+    var tsVariety = +kTsig.value;
     syncChipsToAuto(d);
     var keyName = pickKeyName();
     var key = KEY_BY_NAME[keyName];
     var spellTable = buildSpellTable(key);
     var progression = buildProgression(key, barCount);
+    var timeSig = pickTimeSig(tsVariety);
     var eff = {
       restProb: effective('restProb', d), syncProb: effective('syncProb', d),
       leapProb: effective('leapProb', d), accidentalProb: effective('accidentalProb', d)
+    };
+    var range = {
+      lowMidi: instrument.lowMidi,
+      highMidi: Math.min(instrument.highMidi, instrument.lowMidi + rangeWidthAuto(d))
     };
 
     var barsArr = [], prevMidi = null;
     for(var i=0;i<barCount;i++){
       var chord = progression[i];
       var nextChord = progression[(i+1)%barCount];
-      var cell = pickCell(d, eff);
-      var built = generateBar(chord, nextChord, cell, d, eff, key, prevMidi);
-      barsArr.push({chord:chord, cellId:cell.id, notes:built.notes});
+      var built = generateBar(chord, nextChord, timeSig.groups, d, eff, key, prevMidi, range);
+      barsArr.push({chord:chord, notes:built.notes, groupStartIdx:built.groupStartIdx});
       prevMidi = built.lastMidi;
     }
-    applyCrossBarTies(barsArr, eff.syncProb*0.4);
+    applyIntraBarSyncTies(barsArr, eff);
 
     return {
       key:{name:key.name, vfKey:key.vfKey, pc:key.pc, accidentals:key.acc},
-      clef:clef, tempoBpm:tempo, barCount:barCount, difficulty:d,
-      bars:barsArr, spellTable:spellTable
+      instrument:instrument.id, clef:instrument.clef, tempoBpm:tempo, barCount:barCount, difficulty:d,
+      timeSig:{num:timeSig.num, den:timeSig.den, groups:timeSig.groups},
+      bars:barsArr, spellTable:spellTable, eff:eff
     };
   }
 
   // ================= RENDERING (VexFlow) =================
-  var UNIT_TO_DUR = {1:"16", 2:"8", 4:"q", 8:"h", 16:"w"};
+  // Unit = one 16th note (16 units = a whole note). Dotted values are
+  // expressed with VexFlow's "d" duration-suffix convention so the tick
+  // value (used for Voice validation) is correct automatically; Dot.buildAndAttach
+  // only adds the visual dot glyph on top.
+  var UNIT_DURSPEC = {1:"16", 2:"8", 3:"8d", 4:"q", 6:"qd", 8:"h", 12:"hd", 16:"w"};
+  function isDottedDur(durStr){ return durStr.indexOf("d")>-1; }
+  function isBeamableDur(durStr){ return /^(8|16)d?$/.test(durStr); }
+
+  function buildBarVoice(bar, sng){
+    var vfNotes = [], meta = [];
+    bar.notes.forEach(function(n, ni){
+      var durStr = UNIT_DURSPEC[n.dur];
+      var vfNote;
+      if(n.type==="rest"){
+        vfNote = new Vex.Flow.StaveNote({clef:sng.clef, keys:["b/4"], duration:durStr+"r"});
+      }else{
+        var sp = sng.spellTable[((n.midi%12)+12)%12];
+        var keyStr = vfKeyString(n.midi + WRITTEN_OCTAVE_OFFSET, sp.letter, sp.acc);
+        vfNote = new Vex.Flow.StaveNote({clef:sng.clef, keys:[keyStr], duration:durStr});
+      }
+      if(isDottedDur(durStr)) Vex.Flow.Dot.buildAndAttach([vfNote], {all:true});
+      var gi = 0;
+      for(var q=bar.groupStartIdx.length-1; q>=0; q--){ if(ni>=bar.groupStartIdx[q]){ gi=q; break; } }
+      meta.push({groupIdx:gi, beamable: n.type==="note" && isBeamableDur(durStr)});
+      vfNotes.push(vfNote);
+    });
+    var voice = new Vex.Flow.Voice({num_beats:sng.timeSig.num, beat_value:sng.timeSig.den});
+    voice.addTickables(vfNotes);
+    Vex.Flow.Accidental.applyAccidentals([voice], sng.key.vfKey);
+    return {voice:voice, vfNotes:vfNotes, meta:meta};
+  }
+
+  function measureStaveOverhead(clef, vfKey, timeSigStr, ctx){
+    try{
+      var tmp = new Vex.Flow.Stave(0, 0, 600);
+      tmp.setContext(ctx);
+      tmp.addClef(clef);
+      tmp.addKeySignature(vfKey);
+      if(timeSigStr) tmp.addTimeSignature(timeSigStr);
+      return (tmp.getNoteStartX() - tmp.getX()) + 8;
+    }catch(e){
+      return timeSigStr ? 100 : 74;
+    }
+  }
 
   function renderSong(sng){
     var wrap = $("notationWrap");
     var canvasEl = $("notationCanvas"), hlEl = $("highlightCanvas");
     var canvasWidth = Math.max(360, wrap.clientWidth - 20);
-    var MIN_BAR = 170;
-    var barsPerRow = Math.max(2, Math.floor(canvasWidth/MIN_BAR));
-    var rows = Math.ceil(sng.barCount/barsPerRow);
-    var rowH = 140, topMargin = 40;
-    var totalH = rows*rowH + topMargin;
-
-    canvasEl.width = canvasWidth; canvasEl.height = totalH;
-    hlEl.width = canvasWidth; hlEl.height = totalH;
-    canvasEl.style.width = canvasWidth+"px"; canvasEl.style.height = totalH+"px";
-    hlEl.style.width = canvasWidth+"px"; hlEl.style.height = totalH+"px";
 
     var renderer = new Vex.Flow.Renderer(canvasEl, Vex.Flow.Renderer.Backends.CANVAS);
-    renderer.resize(canvasWidth, totalH);
+    canvasEl.width = canvasWidth; canvasEl.height = 300;
+    renderer.resize(canvasWidth, 300);
+    var mctx = renderer.getContext();
+
+    var timeSigStr = sng.timeSig.num+"/"+sng.timeSig.den;
+    var rowStartOverhead = measureStaveOverhead(sng.clef, sng.key.vfKey, null, mctx);
+    var firstBarOverhead = measureStaveOverhead(sng.clef, sng.key.vfKey, timeSigStr, mctx);
+
+    var BAR_PAD = 30, MIN_BAR_W = 90;
+    var built0 = sng.bars.map(function(bar){ return buildBarVoice(bar, sng); });
+    var minWidths = built0.map(function(b){
+      try{
+        var f = new Vex.Flow.Formatter();
+        f.joinVoices([b.voice]);
+        return Math.max(MIN_BAR_W, f.preCalculateMinTotalWidth([b.voice]));
+      }catch(e){
+        return Math.max(MIN_BAR_W, b.vfNotes.length*36);
+      }
+    });
+
+    // Greedy row packing: each bar gets exactly the width its content needs
+    // (plus padding), so the formatter is never squeezed into less space
+    // than it asked for -- that squeeze is what let notes overflow past the
+    // barline into the next measure.
+    var rows = [];
+    var current = null;
+    for(var i=0;i<sng.barCount;i++){
+      var overhead = current ? 0 : (i===0?firstBarOverhead:rowStartOverhead);
+      var w = minWidths[i] + BAR_PAD + overhead;
+      if(current && current.bars.length>0 && current.width + w > canvasWidth){
+        rows.push(current);
+        current = null;
+        overhead = rowStartOverhead;
+        w = minWidths[i] + BAR_PAD + overhead;
+      }
+      if(!current) current = {bars:[], barWidths:[], width:0};
+      current.bars.push(i);
+      current.barWidths.push(w);
+      current.width += w;
+    }
+    if(current) rows.push(current);
+
+    // Only now do we know which bars end a printed row -- a tie can't jump
+    // from the end of one line to the start of the next, so gate the
+    // cross-bar syncopation pass on that.
+    var rowEndBar = {};
+    rows.forEach(function(row){ rowEndBar[row.bars[row.bars.length-1]] = true; });
+    applyCrossBarSyncTies(sng.bars, sng.eff, function(b){ return !rowEndBar[b]; });
+
+    var neededWidth = canvasWidth;
+    rows.forEach(function(r){ if(r.width>neededWidth) neededWidth = r.width; });
+
+    var rowH = 140, topMargin = 40;
+    var totalH = rows.length*rowH + topMargin;
+
+    canvasEl.width = neededWidth; canvasEl.height = totalH;
+    hlEl.width = neededWidth; hlEl.height = totalH;
+    canvasEl.style.width = neededWidth+"px"; canvasEl.style.height = totalH+"px";
+    hlEl.style.width = neededWidth+"px"; hlEl.style.height = totalH+"px";
+    renderer.resize(neededWidth, totalH);
     var ctx = renderer.getContext();
     var ink = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || "#211C14";
     ctx.setFillStyle(ink); ctx.setStrokeStyle(ink);
     ctx.clear();
 
-    var barW = canvasWidth/barsPerRow;
-    var flat = []; // one entry per StaveNote piece, in draw order
+    var flat = []; // one entry per StaveNote, in draw order (for ties)
     var attacks = []; // one entry per audio/highlight attack
+    var clicks = []; // one entry per metronome beat
     var unitCursor = 0;
 
-    for(var i=0;i<sng.barCount;i++){
-      var rowIdx = Math.floor(i/barsPerRow), colIdx = i%barsPerRow;
-      var x = colIdx*barW, y = topMargin + rowIdx*rowH;
-      var stave = new Vex.Flow.Stave(x, y, barW);
-      if(colIdx===0){
-        stave.addClef(sng.clef);
-        stave.addKeySignature(sng.key.vfKey);
-      }
-      if(i===0){
-        stave.setTempo({duration:"q", dots:0, bpm:sng.tempoBpm}, 0);
-      }
-      stave.setContext(ctx).draw();
-
-      var bar = sng.bars[i];
-      var vfNotes = [], beamable = [];
-      bar.notes.forEach(function(n){
-        var firstBox = null;
-        n.writtenAs.forEach(function(u, wi){
-          var dur = UNIT_TO_DUR[u];
-          var vfNote;
-          if(n.type==="rest"){
-            vfNote = new Vex.Flow.StaveNote({clef:sng.clef, keys:["b/4"], duration:dur+"r"});
-          }else{
-            var sp = sng.spellTable[((n.midi%12)+12)%12];
-            var keyStr = vfKeyString(n.midi, sp.letter, sp.acc);
-            vfNote = new Vex.Flow.StaveNote({clef:sng.clef, keys:[keyStr], duration:dur});
-            if(u===2 || u===1) beamable.push(vfNote);
-          }
-          vfNotes.push(vfNote);
-          flat.push({vfNote:vfNote, internalTieNext: n.writtenAs.length>1 && wi===0, tieToNext: wi===n.writtenAs.length-1 && !!n.tieToNext});
-          if(wi===0) firstBox = vfNote;
-        });
-        if(!n.tiedFromPrev){
-          attacks.push({midi:n.type==="note"?n.midi:null, isRest:n.type==="rest", startUnits:unitCursor, dur:n.dur, vfNote:firstBox});
+    rows.forEach(function(row, rowIdx){
+      var x = 0;
+      var y = topMargin + rowIdx*rowH;
+      row.bars.forEach(function(barIdx, colIdx){
+        var barW = row.barWidths[colIdx];
+        var bar = sng.bars[barIdx];
+        var built = buildBarVoice(bar, sng); // fresh instances for the real draw pass
+        var stave = new Vex.Flow.Stave(x, y, barW);
+        if(colIdx===0){
+          stave.addClef(sng.clef);
+          stave.addKeySignature(sng.key.vfKey);
         }
-        unitCursor += n.dur;
+        if(barIdx===0){
+          stave.addTimeSignature(timeSigStr);
+          stave.setTempo({duration:"q", dots:0, bpm:sng.tempoBpm}, 0);
+        }
+        stave.setContext(ctx).draw();
+
+        var barStartUnit = unitCursor;
+        var groupBeamables = bar.groupStartIdx.map(function(){ return []; });
+        built.vfNotes.forEach(function(vfNote, ni){
+          var n = bar.notes[ni];
+          var meta = built.meta[ni];
+          flat.push({vfNote:vfNote, tieToNext: !!n.tieToNext});
+          if(!n.tiedFromPrev){
+            attacks.push({midi:n.type==="note"?n.midi:null, isRest:n.type==="rest", startUnits:unitCursor, dur:n.dur, vfNote:vfNote});
+          }
+          if(meta.beamable) groupBeamables[meta.groupIdx].push(vfNote);
+          unitCursor += n.dur;
+        });
+
+        var formatter = new Vex.Flow.Formatter();
+        formatter.joinVoices([built.voice]).format([built.voice], Math.max(20, barW - BAR_PAD), {align_rests:true});
+        built.voice.draw(ctx, stave);
+
+        groupBeamables.forEach(function(arr){
+          // Build the beam directly over our own per-beat grouping rather than
+          // Beam.generateBeams(), which re-splits into its own default 2/8-tick
+          // chunks and chops a beat like [8th,16th,16th,8th] into two pieces
+          // (leaving the outer notes with stray individual flags).
+          if(arr.length>1){
+            try{
+              var beam = new Vex.Flow.Beam(arr);
+              beam.setContext(ctx).draw();
+            }catch(e){}
+          }
+        });
+
+        var goff = 0;
+        sng.timeSig.groups.forEach(function(kind, gi){
+          clicks.push({startUnits: barStartUnit+goff, accent: gi===0});
+          goff += groupUnits(kind);
+        });
+
+        x += barW;
       });
-
-      var voice = new Vex.Flow.Voice({num_beats:4, beat_value:4});
-      voice.addTickables(vfNotes);
-      Vex.Flow.Accidental.applyAccidentals([voice], sng.key.vfKey);
-      var formatter = new Vex.Flow.Formatter();
-      formatter.joinVoices([voice]).format([voice], Math.max(60, barW-24));
-      voice.draw(ctx, stave);
-
-      if(beamable.length){
-        try{
-          var beams = Vex.Flow.Beam.generateBeams(beamable);
-          beams.forEach(function(b){ b.setContext(ctx).draw(); });
-        }catch(e){}
-      }
-    }
+    });
 
     for(var k=0;k<flat.length;k++){
-      var m = flat[k];
-      if((m.internalTieNext || m.tieToNext) && flat[k+1]){
+      if(flat[k].tieToNext && flat[k+1]){
         try{
-          var tie = new Vex.Flow.StaveTie({first_note:m.vfNote, last_note:flat[k+1].vfNote});
+          var tie = new Vex.Flow.StaveTie({first_note:flat[k].vfNote, last_note:flat[k+1].vfNote});
           tie.setContext(ctx).draw();
         }catch(e){}
       }
@@ -827,13 +1009,14 @@
     });
 
     sng.attacks = attacks;
-    sng.totalUnits = sng.barCount*16;
+    sng.clicks = clicks;
+    sng.totalUnits = unitCursor;
   }
 
   // ================= AUDIO =================
   var actx=null, master=null, lp=null, noteBus=null;
   var playing=false, scheduler=null, rafId=null;
-  var stepCounter=0, nextStepTime=0, attackCursor=0;
+  var stepCounter=0, nextStepTime=0, attackCursor=0, clickCursor=0;
   var playhead=[], live=[];
 
   function ensureAudio(){
@@ -866,6 +1049,18 @@
       k=live.indexOf(o2); if(k>-1) live.splice(k,1);
     };
   }
+  function playClick(t, accent){
+    var o=actx.createOscillator(); o.type="square"; o.frequency.value = accent?1800:1200;
+    var g=actx.createGain();
+    o.connect(g); g.connect(master);
+    var peak = accent?0.32:0.20;
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(peak, t+0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+0.045);
+    o.start(t); o.stop(t+0.05);
+    live.push(o);
+    o.onended=function(){ var k=live.indexOf(o); if(k>-1) live.splice(k,1); };
+  }
 
   function schedule(){
     if(!playing || !actx || !song) return;
@@ -882,6 +1077,11 @@
         if(!att.isRest) playNote(mtof(att.midi), nextStepTime, att.dur*s16*1.05);
         playhead.push({t:nextStepTime, box:att.box});
         attackCursor++;
+      }
+      var clk = song.clicks[clickCursor];
+      if(clk && clk.startUnits===stepCounter){
+        if(metroToggle.checked) playClick(nextStepTime, clk.accent);
+        clickCursor++;
       }
       stepCounter++;
       nextStepTime += s16;
@@ -921,7 +1121,7 @@
     if(!song) return;
     ensureAudio();
     if(actx.state==="suspended") actx.resume();
-    stepCounter=0; attackCursor=0;
+    stepCounter=0; attackCursor=0; clickCursor=0;
     nextStepTime = actx.currentTime+0.15;
     playhead=[];
     playing=true;
@@ -945,6 +1145,7 @@
 
   // ================= ELEMENTS =================
   var consoleEl=$("console");
+  var instrumentEl=$("instrument");
   var diffEl=$("diff"), diffVal=$("diffVal"), diffTier=$("diffTier");
   var tempoEl=$("tempo"), tempoVal=$("tempoVal");
   var barsMinus=$("barsMinus"), barsPlus=$("barsPlus"), barsVal=$("barsVal");
@@ -952,6 +1153,8 @@
   var advToggle=$("advToggle"), advPanel=$("advPanel"), advReset=$("advReset");
   var kRest=$("k-rest"), kSync=$("k-sync"), kLeap=$("k-leap"), kAcc=$("k-acc"), kKeycx=$("k-keycx");
   var kRestVal=$("k-rest-val"), kSyncVal=$("k-sync-val"), kLeapVal=$("k-leap-val"), kAccVal=$("k-acc-val"), kKeycxVal=$("k-keycx-val");
+  var kTsig=$("k-tsig"), kTsigVal=$("k-tsig-val");
+  var metroToggle=$("metroToggle");
   var keyRow=$("keyRow"), genInfo=$("genInfo"), themeBtn=$("themeBtn");
 
   var barsCount = 8;
@@ -1036,8 +1239,17 @@
     refreshAdvancedUI();
   });
 
-  document.querySelectorAll('input[name="clef"]').forEach(function(r){
-    r.addEventListener("change", function(){ store("sr-clef", r.value); });
+  instrumentEl.addEventListener("change", function(){
+    store("sr-instrument", instrumentEl.value);
+  });
+
+  kTsig.addEventListener("input", function(){
+    kTsigVal.textContent = kTsig.value;
+    store("sr-tsig", kTsig.value);
+  });
+
+  metroToggle.addEventListener("change", function(){
+    store("sr-metro", metroToggle.checked?"1":"0");
   });
 
   tempoEl.addEventListener("input", function(){
@@ -1060,7 +1272,8 @@
     if(playing) stopPlayback();
     song = generateSong();
     renderSong(song);
-    genInfo.textContent = song.key.name.replace("b","♭")+" major · "+song.tempoBpm+" BPM · "+song.barCount+" bars";
+    genInfo.textContent = song.key.name.replace("b","♭")+" major · "+song.timeSig.num+"/"+song.timeSig.den+
+      " · "+song.tempoBpm+" BPM · "+song.barCount+" bars · "+INSTRUMENTS[song.instrument].label;
   }
   genBtn.addEventListener("click", doGenerate);
   playBtn.addEventListener("click", function(){
@@ -1069,7 +1282,7 @@
   pngBtn.addEventListener("click", function(){
     if(!song) return;
     var a = document.createElement("a");
-    a.download = "sight-reading-"+song.key.name+"-"+song.barCount+"bars.png";
+    a.download = "sight-reading-"+song.instrument+"-"+song.key.name+"-"+song.barCount+"bars.png";
     a.href = $("notationCanvas").toDataURL("image/png");
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   });
@@ -1093,11 +1306,12 @@
   // ---- restore ----
   (function restore(){
     var t = recall("theme"); if(t) applyTheme(t);
-    var c = recall("sr-clef");
-    if(c){ var el=document.querySelector('input[name="clef"][value="'+c+'"]'); if(el) el.checked=true; }
+    var iv = recall("sr-instrument"); if(iv && INSTRUMENTS[iv]) instrumentEl.value = iv;
     var dv = recall("sr-difficulty"); if(dv && +dv>=1 && +dv<=100) diffEl.value = dv;
     var tv = recall("sr-tempo"); if(tv && +tv>=40 && +tv<=160){ tempoEl.value = tv; tempoVal.textContent = tv; }
     var bv = recall("sr-bars"); if(bv && +bv>=4 && +bv<=20) barsCount = +bv;
+    var tsv = recall("sr-tsig"); if(tsv!==null && +tsv>=0 && +tsv<=100){ kTsig.value=tsv; kTsigVal.textContent=tsv; }
+    var mv = recall("sr-metro"); if(mv!==null) metroToggle.checked = mv==="1";
     var kn = recall("sr-knobs");
     if(kn){ try{ var parsed=JSON.parse(kn); Object.keys(parsed).forEach(function(n){ if(knobs[n]) knobs[n]=parsed[n]; }); }catch(e){} }
     var ct = recall("sr-chipstouched");
