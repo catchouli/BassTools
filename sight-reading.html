@@ -924,6 +924,7 @@
   // number -- durations pass straight through with no conversion.
   var MXML_NOTE_TYPE = {1:"16th", 2:"eighth", 3:"eighth", 4:"quarter", 6:"quarter", 8:"half", 12:"half", 16:"whole"};
   var MXML_DOTTED = {3:1, 6:1, 12:1};
+  var HARMONY_KIND = {maj:"major", min:"minor", dim:"diminished"};
   function isBeamableUnit(u){ return u===1 || u===2 || u===3; }
 
   // Beam state for one contiguous run of beamable notes within a single
@@ -969,6 +970,16 @@
           +'</attributes>');
         p.push('<direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>'
           +sng.tempoBpm+'</per-minute></metronome></direction-type><sound tempo="'+sng.tempoBpm+'"/></direction>');
+      }
+
+      // Chord symbol above the staff: on the first bar, then again wherever
+      // the underlying chord changes from the previous bar.
+      var prevChord = bi>0 ? sng.bars[bi-1].chord : null;
+      if(!prevChord || prevChord.rootPc!==bar.chord.rootPc || prevChord.quality!==bar.chord.quality){
+        var rsp = sng.spellTable[((bar.chord.rootPc%12)+12)%12];
+        p.push('<harmony><root><root-step>'+rsp.letter+'</root-step>'
+          +(rsp.acc?('<root-alter>'+rsp.acc+'</root-alter>'):'')
+          +'</root><kind>'+(HARMONY_KIND[bar.chord.quality]||"major")+'</kind></harmony>');
       }
 
       // Precompute beam tags per note index, one contiguous beamable run per beat.
