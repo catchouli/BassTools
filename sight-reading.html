@@ -193,7 +193,8 @@
   }
 
   .two-col{display:flex;gap:16px;flex-wrap:wrap}
-  .two-col .col{display:flex;flex-direction:column;gap:9px}
+  .two-col .col{display:flex;flex-direction:column;gap:9px;min-width:0}
+  .two-col .col.grow{flex:1}
 
   .stepper{display:flex;align-items:center;gap:0;width:fit-content}
   .stepper button{
@@ -305,19 +306,22 @@
 
     <div class="controls">
       <div class="grp">
-        <span class="grp-label">Instrument</span>
-        <select class="select" id="instrument">
-          <option value="bass4">4-String Bass</option>
-          <option value="bass5">5-String Bass</option>
-          <option value="guitar6">6-String Guitar</option>
-        </select>
-      </div>
-
-      <div class="grp">
-        <span class="grp-label">Generate</span>
-        <div class="choice-row" id="genTypeRow">
-          <input type="radio" name="genType" id="gt-bassline" value="bassline" checked><label for="gt-bassline">Bassline</label>
-          <input type="radio" name="genType" id="gt-melody" value="melody"><label for="gt-melody">Melody</label>
+        <div class="two-col">
+          <div class="col grow">
+            <span class="grp-label">Instrument</span>
+            <select class="select" id="instrument">
+              <option value="bass4">4-String Bass</option>
+              <option value="bass5">5-String Bass</option>
+              <option value="guitar6">6-String Guitar</option>
+            </select>
+          </div>
+          <div class="col">
+            <span class="grp-label">Generate</span>
+            <div class="choice-row" id="genTypeRow">
+              <input type="radio" name="genType" id="gt-bassline" value="bassline" checked><label for="gt-bassline">Bassline</label>
+              <input type="radio" name="genType" id="gt-melody" value="melody"><label for="gt-melody">Melody</label>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -414,7 +418,10 @@
       </div>
 
       <div class="grp">
-        <label class="check-row"><input type="checkbox" id="metroToggle" checked><span>Metronome click during playback</span></label>
+        <div class="two-col">
+          <label class="check-row"><input type="checkbox" id="metroToggle" checked><span>Metronome click</span></label>
+          <label class="check-row"><input type="checkbox" id="legatoToggle" checked><span>Legato playback</span></label>
+        </div>
       </div>
 
       <button class="play" id="genBtn" type="button">
@@ -878,6 +885,16 @@
       });
       beatOffsets.forEach(function(b){ clicks.push({startUnits: barStartUnit+b.offset, accent: b.accent}); });
     });
+    // How long each attack can ring before the next written event (note or
+    // rest) begins -- ties already collapse to one attacks[] entry spanning
+    // their full combined duration, so this "ring until the next event"
+    // rule gives tied notes their full length for free and lets legato
+    // playback connect consecutive notes with no gap, while still cutting
+    // off cleanly at a rest.
+    attacks.forEach(function(a, i){
+      var nextStart = (i+1<attacks.length) ? attacks[i+1].startUnits : unitCursor;
+      a.ringUnits = nextStart - a.startUnits;
+    });
     sng.attacks = attacks;
     sng.clicks = clicks;
     sng.cursorSteps = cursorSteps;
@@ -1116,7 +1133,10 @@
       }else{
         var att = song.attacks[attackCursor];
         if(att && att.startUnits===stepCounter){
-          if(!att.isRest) playNote(mtof(att.midi), nextStepTime, att.dur*s16*1.05);
+          if(!att.isRest){
+            var artFactor = legatoToggle.checked ? 1.08 : 0.55;
+            playNote(mtof(att.midi), nextStepTime, Math.max(att.ringUnits*s16*artFactor, s16*0.5));
+          }
           attackCursor++;
         }
         var clk = song.clicks[clickCursor];
@@ -1200,7 +1220,7 @@
   var kRest=$("k-rest"), kSync=$("k-sync"), kLeap=$("k-leap"), kAcc=$("k-acc"), kKeycx=$("k-keycx");
   var kRestVal=$("k-rest-val"), kSyncVal=$("k-sync-val"), kLeapVal=$("k-leap-val"), kAccVal=$("k-acc-val"), kKeycxVal=$("k-keycx-val");
   var kTsig=$("k-tsig"), kTsigVal=$("k-tsig-val");
-  var metroToggle=$("metroToggle");
+  var metroToggle=$("metroToggle"), legatoToggle=$("legatoToggle");
   var keyRow=$("keyRow"), genInfo=$("genInfo"), themeBtn=$("themeBtn");
 
   var barsCount = 8;
@@ -1301,6 +1321,10 @@
     store("sr-metro", metroToggle.checked?"1":"0");
   });
 
+  legatoToggle.addEventListener("change", function(){
+    store("sr-legato", legatoToggle.checked?"1":"0");
+  });
+
   var tempoRenderTimer = null;
   tempoEl.addEventListener("input", function(){
     tempoVal.textContent = tempoEl.value;
@@ -1376,6 +1400,7 @@
     var bv = recall("sr-bars"); if(bv && +bv>=4 && +bv<=20) barsCount = +bv;
     var lv = recall("sr-leadin"); if(lv!==null && +lv>=0 && +lv<=4) leadIn = +lv;
     var mv = recall("sr-metro"); if(mv!==null) metroToggle.checked = mv==="1";
+    var lgv = recall("sr-legato"); if(lgv!==null) legatoToggle.checked = lgv==="1";
     var kn = recall("sr-knobs");
     if(kn){ try{ var parsed=JSON.parse(kn); Object.keys(parsed).forEach(function(n){ if(knobs[n]) knobs[n]=parsed[n]; }); }catch(e){} }
     var ct = recall("sr-chipstouched");
