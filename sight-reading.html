@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sight Reading Practice</title>
+<link rel="icon" href="favicon.ico">
 <meta name="description" content="A procedurally generated sight-reading trainer for bass and guitar: pick your instrument, a 1-100 difficulty slider, randomized key signatures and time signatures, a metronome, and play-along audio, entirely in your browser.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -191,6 +192,9 @@
     font-size:11.5px;color:var(--ink-soft);
   }
 
+  .two-col{display:flex;gap:16px;flex-wrap:wrap}
+  .two-col .col{display:flex;flex-direction:column;gap:9px}
+
   .stepper{display:flex;align-items:center;gap:0;width:fit-content}
   .stepper button{
     width:38px;height:38px;font-size:19px;line-height:1;
@@ -369,17 +373,15 @@
               <span class="readout"><span id="k-keycx-val">&le;1&#9839;/&#9837;</span></span>
             </div>
           </div>
+          <div class="grp">
+            <span class="grp-label">Time signature variety</span>
+            <div class="slider-row">
+              <input type="range" id="k-tsig" min="0" max="100" step="1" value="0" aria-label="Time signature variety">
+              <span class="readout"><span id="k-tsig-val">0</span>%</span>
+            </div>
+          </div>
           <button class="reset-link" id="advReset" type="button">Reset to difficulty</button>
         </div>
-      </div>
-
-      <div class="grp">
-        <span class="grp-label">Time signature variety</span>
-        <div class="slider-row">
-          <input type="range" id="k-tsig" min="0" max="100" step="1" value="20" aria-label="Time signature variety">
-          <span class="readout"><span id="k-tsig-val">20</span>%</span>
-        </div>
-        <span class="tier-label">Always 4/4 at 0% &mdash; still mostly 4/4 even at 100%</span>
       </div>
 
       <div class="grp">
@@ -391,11 +393,23 @@
       </div>
 
       <div class="grp">
-        <span class="grp-label">Bars</span>
-        <div class="stepper">
-          <button type="button" id="barsMinus" aria-label="Fewer bars">&minus;</button>
-          <span class="val" id="barsVal">8</span>
-          <button type="button" id="barsPlus" aria-label="More bars">+</button>
+        <div class="two-col">
+          <div class="col">
+            <span class="grp-label">Bars</span>
+            <div class="stepper">
+              <button type="button" id="barsMinus" aria-label="Fewer bars">&minus;</button>
+              <span class="val" id="barsVal">8</span>
+              <button type="button" id="barsPlus" aria-label="More bars">+</button>
+            </div>
+          </div>
+          <div class="col">
+            <span class="grp-label">Lead-in</span>
+            <div class="stepper">
+              <button type="button" id="leadMinus" aria-label="Fewer lead-in bars">&minus;</button>
+              <span class="val" id="leadVal">1</span>
+              <button type="button" id="leadPlus" aria-label="More lead-in bars">+</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -648,6 +662,7 @@
   function accidentalProbAuto(d){ return d<=20?0:0.35*(d-20)/80; }
   function rangeWidthAuto(d){ return 12+Math.round(12*((d-1)/99)); }
   function keyComplexityIdxAuto(d){ return d<=20?0:d<=40?1:d<=60?2:d<=80?3:4; }
+  function tsigVarietyAuto(d){ return d<=30?0:Math.round(100*clamp((d-30)/70,0,1)); }
   var KEY_COMPLEXITY_MAX = [1,2,3,4,6];
   function difficultyLabel(d){
     if(d<=20) return "Tier 1 · quarter notes only, no rests, simplest keys";
@@ -659,12 +674,13 @@
 
   var AUTO_FN = {
     restProb: restProbAuto, syncProb: syncProbAuto, leapProb: leapProbAuto,
-    accidentalProb: accidentalProbAuto, keyComplexity: keyComplexityIdxAuto
+    accidentalProb: accidentalProbAuto, keyComplexity: keyComplexityIdxAuto,
+    tsigVariety: tsigVarietyAuto
   };
   var knobs = {
     restProb:{auto:true,value:0}, syncProb:{auto:true,value:0},
     leapProb:{auto:true,value:0.3}, accidentalProb:{auto:true,value:0},
-    keyComplexity:{auto:true,value:0}
+    keyComplexity:{auto:true,value:0}, tsigVariety:{auto:true,value:0}
   };
   function effective(name, d){
     var k = knobs[name];
@@ -803,7 +819,7 @@
     var genType = (document.querySelector('input[name="genType"]:checked')||{}).value || "bassline";
     var barCount = barsCount;
     var tempo = +tempoEl.value;
-    var tsVariety = +kTsig.value;
+    var tsVariety = effective('tsigVariety', d);
     syncChipsToAuto(d);
     var keyName = pickKeyName();
     var key = KEY_BY_NAME[keyName];
@@ -846,6 +862,11 @@
   function buildPlaybackData(sng){
     var attacks = [], clicks = [], cursorSteps = [];
     var unitCursor = 0;
+    var beatOffsets = [], barUnits = 0;
+    sng.timeSig.groups.forEach(function(kind, gi){
+      beatOffsets.push({offset:barUnits, accent:gi===0});
+      barUnits += groupUnits(kind);
+    });
     sng.bars.forEach(function(bar){
       var barStartUnit = unitCursor;
       bar.notes.forEach(function(n){
@@ -855,15 +876,13 @@
         }
         unitCursor += n.dur;
       });
-      var goff = 0;
-      sng.timeSig.groups.forEach(function(kind, gi){
-        clicks.push({startUnits: barStartUnit+goff, accent: gi===0});
-        goff += groupUnits(kind);
-      });
+      beatOffsets.forEach(function(b){ clicks.push({startUnits: barStartUnit+b.offset, accent: b.accent}); });
     });
     sng.attacks = attacks;
     sng.clicks = clicks;
     sng.cursorSteps = cursorSteps;
+    sng.barUnits = barUnits;
+    sng.beatOffsets = beatOffsets;
     sng.totalUnits = unitCursor;
   }
 
@@ -1079,19 +1098,36 @@
         clearInterval(scheduler); scheduler=null;
         return;
       }
-      var att = song.attacks[attackCursor];
-      if(att && att.startUnits===stepCounter){
-        if(!att.isRest) playNote(mtof(att.midi), nextStepTime, att.dur*s16*1.05);
-        attackCursor++;
+      if(stepCounter===0){
+        // Lead-in (if any) just ended: reveal the cursor and switch the
+        // button label right as the real piece begins.
+        playhead.push({t:nextStepTime, revealCursor:true});
       }
-      var clk = song.clicks[clickCursor];
-      if(clk && clk.startUnits===stepCounter){
-        if(metroToggle.checked) playClick(nextStepTime, clk.accent);
-        clickCursor++;
-      }
-      while(cursorStepIdx+1 < song.cursorSteps.length && song.cursorSteps[cursorStepIdx+1].startUnits===stepCounter){
-        cursorStepIdx++;
-        playhead.push({t:nextStepTime, advanceCursor:true});
+      if(stepCounter<0){
+        // Lead-in: metronome only, using the same per-bar beat pattern as
+        // the real piece so the count-in feels like the piece's own pulse.
+        var posInBar = ((stepCounter % song.barUnits) + song.barUnits) % song.barUnits;
+        for(var bi=0; bi<song.beatOffsets.length; bi++){
+          if(song.beatOffsets[bi].offset===posInBar){
+            if(metroToggle.checked) playClick(nextStepTime, song.beatOffsets[bi].accent);
+            break;
+          }
+        }
+      }else{
+        var att = song.attacks[attackCursor];
+        if(att && att.startUnits===stepCounter){
+          if(!att.isRest) playNote(mtof(att.midi), nextStepTime, att.dur*s16*1.05);
+          attackCursor++;
+        }
+        var clk = song.clicks[clickCursor];
+        if(clk && clk.startUnits===stepCounter){
+          if(metroToggle.checked) playClick(nextStepTime, clk.accent);
+          clickCursor++;
+        }
+        while(cursorStepIdx+1 < song.cursorSteps.length && song.cursorSteps[cursorStepIdx+1].startUnits===stepCounter){
+          cursorStepIdx++;
+          playhead.push({t:nextStepTime, advanceCursor:true});
+        }
       }
       stepCounter++;
       nextStepTime += s16;
@@ -1103,6 +1139,10 @@
       while(playhead.length && playhead[0].t<=now+0.001){
         var ev=playhead.shift();
         if(ev.done){ stopPlayback(); return; }
+        if(ev.revealCursor){
+          playLabel.textContent = "Stop";
+          if(osmd && osmd.cursor){ try{ osmd.cursor.show(); }catch(e){} }
+        }
         if(ev.advanceCursor && osmd && osmd.cursor){ try{ osmd.cursor.next(); }catch(e){} }
       }
     }
@@ -1112,10 +1152,10 @@
     live.slice().forEach(function(n){ try{ n.stop(); }catch(e){} });
     live.length=0;
   }
-  function setPlayUI(on){
+  function setPlayUI(on, isLeadIn){
     playBtn.classList.toggle("playing", on);
     playBtn.setAttribute("aria-pressed", on?"true":"false");
-    playLabel.textContent = on?"Stop":"Play";
+    playLabel.textContent = on ? (isLeadIn?"Count-in…":"Stop") : "Play";
     playBtn.querySelector(".glyph").innerHTML = on?"&#9632;":"&#9654;";
     consoleEl.classList.toggle("locked", on);
     genBtn.disabled = on;
@@ -1124,12 +1164,13 @@
     if(!song || !osmd || !osmd.cursor) return;
     ensureAudio();
     if(actx.state==="suspended") actx.resume();
-    stepCounter=0; attackCursor=0; clickCursor=0; cursorStepIdx=0;
+    stepCounter = -(leadIn*song.barUnits);
+    attackCursor=0; clickCursor=0; cursorStepIdx=0;
     nextStepTime = actx.currentTime+0.15;
     playhead=[];
     playing=true;
-    setPlayUI(true);
-    try{ osmd.cursor.reset(); osmd.cursor.show(); }catch(e){}
+    setPlayUI(true, leadIn>0);
+    try{ osmd.cursor.reset(); }catch(e){}
     schedule();
     scheduler=setInterval(schedule,25);
     rafId=requestAnimationFrame(renderLoop);
@@ -1153,6 +1194,7 @@
   var diffEl=$("diff"), diffVal=$("diffVal"), diffTier=$("diffTier");
   var tempoEl=$("tempo"), tempoVal=$("tempoVal");
   var barsMinus=$("barsMinus"), barsPlus=$("barsPlus"), barsVal=$("barsVal");
+  var leadMinus=$("leadMinus"), leadPlus=$("leadPlus"), leadVal=$("leadVal");
   var genBtn=$("genBtn"), playBtn=$("playBtn"), playLabel=$("playLabel"), pngBtn=$("pngBtn");
   var advToggle=$("advToggle"), advPanel=$("advPanel"), advReset=$("advReset");
   var kRest=$("k-rest"), kSync=$("k-sync"), kLeap=$("k-leap"), kAcc=$("k-acc"), kKeycx=$("k-keycx");
@@ -1162,6 +1204,7 @@
   var keyRow=$("keyRow"), genInfo=$("genInfo"), themeBtn=$("themeBtn");
 
   var barsCount = 8;
+  var leadIn = 1;
   var song = null;
 
   // ---- build key chip row ----
@@ -1202,11 +1245,13 @@
     if(knobs.leapProb.auto) kLeap.value = Math.round(leapProbAuto(d)*100);
     if(knobs.accidentalProb.auto) kAcc.value = Math.round(accidentalProbAuto(d)*100);
     if(knobs.keyComplexity.auto) kKeycx.value = keyComplexityIdxAuto(d);
+    if(knobs.tsigVariety.auto) kTsig.value = tsigVarietyAuto(d);
     kRestVal.textContent = kRest.value;
     kSyncVal.textContent = kSync.value;
     kLeapVal.textContent = kLeap.value;
     kAccVal.textContent = kAcc.value;
     kKeycxVal.textContent = KEYCX_LABELS[+kKeycx.value];
+    kTsigVal.textContent = kTsig.value;
   }
 
   function wireKnob(el, valEl, name, fromUI){
@@ -1223,6 +1268,7 @@
   wireKnob(kLeap, kLeapVal, "leapProb", function(v){ return v/100; });
   wireKnob(kAcc, kAccVal, "accidentalProb", function(v){ return v/100; });
   wireKnob(kKeycx, kKeycxVal, "keyComplexity", function(v){ return v; });
+  wireKnob(kTsig, kTsigVal, "tsigVariety", function(v){ return v; });
 
   advToggle.addEventListener("click", function(){
     var open = advPanel.hidden;
@@ -1251,11 +1297,6 @@
     r.addEventListener("change", function(){ store("sr-gentype", r.value); });
   });
 
-  kTsig.addEventListener("input", function(){
-    kTsigVal.textContent = kTsig.value;
-    store("sr-tsig", kTsig.value);
-  });
-
   metroToggle.addEventListener("change", function(){
     store("sr-metro", metroToggle.checked?"1":"0");
   });
@@ -1280,6 +1321,16 @@
   }
   barsMinus.addEventListener("click", function(){ setBars(barsCount-4); });
   barsPlus.addEventListener("click", function(){ setBars(barsCount+4); });
+
+  function setLeadIn(v){
+    leadIn = clamp(v,0,4);
+    leadVal.textContent = leadIn;
+    store("sr-leadin", leadIn);
+    leadMinus.disabled = leadIn<=0;
+    leadPlus.disabled = leadIn>=4;
+  }
+  leadMinus.addEventListener("click", function(){ setLeadIn(leadIn-1); });
+  leadPlus.addEventListener("click", function(){ setLeadIn(leadIn+1); });
 
   function doGenerate(){
     if(playing) stopPlayback();
@@ -1323,7 +1374,7 @@
     var dv = recall("sr-difficulty"); if(dv && +dv>=1 && +dv<=100) diffEl.value = dv;
     var tv = recall("sr-tempo"); if(tv && +tv>=40 && +tv<=160){ tempoEl.value = tv; tempoVal.textContent = tv; }
     var bv = recall("sr-bars"); if(bv && +bv>=4 && +bv<=20) barsCount = +bv;
-    var tsv = recall("sr-tsig"); if(tsv!==null && +tsv>=0 && +tsv<=100){ kTsig.value=tsv; kTsigVal.textContent=tsv; }
+    var lv = recall("sr-leadin"); if(lv!==null && +lv>=0 && +lv<=4) leadIn = +lv;
     var mv = recall("sr-metro"); if(mv!==null) metroToggle.checked = mv==="1";
     var kn = recall("sr-knobs");
     if(kn){ try{ var parsed=JSON.parse(kn); Object.keys(parsed).forEach(function(n){ if(knobs[n]) knobs[n]=parsed[n]; }); }catch(e){} }
@@ -1336,6 +1387,7 @@
   })();
 
   setBars(barsCount);
+  setLeadIn(leadIn);
   refreshAdvancedUI();
   doGenerate();
 })();
