@@ -108,6 +108,7 @@
   .lede strong{color:var(--ink);font-weight:600}
 
   .console{
+    position:relative;
     background:var(--panel);
     border:1px solid var(--line);
     border-radius:16px;
@@ -119,6 +120,22 @@
   }
   @media (max-width:860px){
     .console{grid-template-columns:1fr;gap:22px;padding:18px}
+  }
+
+  .expand-btn{
+    position:absolute;top:14px;right:14px;z-index:5;
+    width:34px;height:34px;padding:0;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--panel-2);color:var(--ink-soft);
+    border:1px solid var(--line);border-radius:8px;
+    cursor:pointer;font-size:15px;line-height:1;
+  }
+  .expand-btn:hover{color:var(--ink);border-color:var(--ink-faint)}
+  .console.expanded{
+    position:fixed;inset:0;z-index:1000;
+    width:100vw;height:100vh;
+    border-radius:0;box-shadow:none;
+    overflow:auto;
   }
 
   .notation-panel{display:flex;flex-direction:column;gap:14px;min-width:0}
@@ -294,6 +311,7 @@
   </p>
 
   <div class="console" id="console">
+    <button class="expand-btn" id="expandBtn" type="button" aria-label="Expand to fill screen" aria-pressed="false">&#10530;</button>
     <div class="notation-panel">
       <div class="notation-wrap" id="notationWrap">
         <div id="osmdContainer"></div>
@@ -1438,6 +1456,24 @@
     var next = cur==="dark" ? "light" : "dark";
     applyTheme(next); store("theme", next);
     redrawColors();
+  });
+
+  // ---- expand ----
+  var expandBtn = $("expandBtn");
+  function setExpanded(on){
+    consoleEl.classList.toggle("expanded", on);
+    expandBtn.setAttribute("aria-pressed", on?"true":"false");
+    expandBtn.setAttribute("aria-label", on?"Exit fullscreen":"Expand to fill screen");
+    expandBtn.innerHTML = on?"&#10529;":"&#10530;";
+    // The console's own size changed, not the window's, so OSMD's resize
+    // listener never fires -- force it to re-measure and re-justify.
+    if(osmd && osmd.Sheet) requestAnimationFrame(function(){ osmd.render(); });
+  }
+  expandBtn.addEventListener("click", function(){
+    setExpanded(!consoleEl.classList.contains("expanded"));
+  });
+  document.addEventListener("keydown", function(e){
+    if(e.key==="Escape" && consoleEl.classList.contains("expanded")) setExpanded(false);
   });
 
   // ---- restore ----
