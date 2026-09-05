@@ -125,8 +125,12 @@
     border:1px solid var(--line);border-radius:12px;
     padding:10px;overflow-x:auto;
   }
-  .notation-wrap canvas{display:block}
-  #highlightCanvas{position:absolute;left:10px;top:10px;pointer-events:none}
+  #osmdContainer{min-height:120px}
+  #osmdContainer canvas{display:block}
+  /* OSMD's playback cursor is an <img> with an inline z-index:-1, which
+     renders it behind this panel's own background instead of over the
+     notation -- force it back above the canvas. */
+  #osmdContainer img{z-index:1!important;opacity:.5}
   .notation-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
   .btn{
     font-family:"IBM Plex Mono",ui-monospace,monospace;
@@ -287,8 +291,7 @@
   <div class="console" id="console">
     <div class="notation-panel">
       <div class="notation-wrap" id="notationWrap">
-        <canvas id="notationCanvas"></canvas>
-        <canvas id="highlightCanvas"></canvas>
+        <div id="osmdContainer"></div>
       </div>
       <div class="notation-actions">
         <button class="btn" id="pngBtn" type="button">Download PNG</button>
@@ -417,7 +420,7 @@
   </footer>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.3/build/cjs/vexflow.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@2.1.2/build/opensheetmusicdisplay.min.js"></script>
 <script>
 (function(){
   "use strict";
@@ -451,14 +454,6 @@
   KEY_TABLE.forEach(function(k){ KEY_BY_NAME[k.name] = k; });
   var KEY_NAMES = KEY_TABLE.map(function(k){ return k.name; });
 
-  function accStr(acc){
-    if(acc<=-2) return "bb";
-    if(acc===-1) return "b";
-    if(acc===0) return "";
-    if(acc===1) return "#";
-    return "##";
-  }
-
   function buildSpellTable(key){
     var startIdx = LETTERS.indexOf(key.name.charAt(0));
     var diatonic = [];
@@ -480,11 +475,6 @@
       else table[pc] = {letter:"C", acc:0};
     }
     return table;
-  }
-
-  function vfKeyString(writtenMidi, letter, acc){
-    var oct = Math.floor((writtenMidi-acc)/12) - 1;
-    return letter.toLowerCase() + accStr(acc) + "/" + oct;
   }
 
   var DEGREE_INDEX = {I:0, ii:1, iii:2, IV:3, V:4, vi:5, vii:6};
@@ -589,9 +579,9 @@
 
   // ================= RHYTHM (per-beat cells) =================
   // Every slot's unit count maps to exactly one nameable (possibly dotted)
-  // written duration -- see UNIT_DURSPEC below -- so syncopation is produced
-  // entirely by tying two adjacent written notes across a beat/bar boundary
-  // (applySyncTies), never by faking one attack out of multiple pieces.
+  // written duration -- see MXML_NOTE_TYPE below -- so syncopation is
+  // produced entirely by tying two adjacent written notes across a
+  // beat/bar boundary, never by faking one attack out of multiple pieces.
   var SIMPLE_BEAT_CELLS = [ // sums to 4 units (one simple beat)
     {id:"s-q",         minDiff:1,  tags:[],             tokens:[{u:4}]},
     {id:"s-ee",        minDiff:21, tags:[],             tokens:[{u:2},{u:2}]},
@@ -770,13 +760,19 @@
     return {notes:notes, lastMidi:cursor, groupStartIdx:groupStartIdx};
   }
 
+  // A tie is only used for genuine syncopation: `prev` must have started off
+  // the beat within its own beat-group. Tying an on-beat, whole-beat note
+  // forward is what a real engraver would instead just write as one longer
+  // note (e.g. a half note, not two tied quarters) -- ties that ignore this
+  // rule are exactly what read as pointless "tails on tied notes".
   function applyIntraBarSyncTies(barsArr, eff){
     barsArr.forEach(function(bar){
       var notes = bar.notes, starts = bar.groupStartIdx;
       for(var g=1; g<starts.length; g++){
         var i = starts[g];
         var prev = notes[i-1], cur = notes[i];
-        if(prev && cur && prev.type==="note" && cur.type==="note" && !prev.tieToNext && Math.random()<eff.syncProb*0.5){
+        var prevStartedOffBeat = (i-1) !== starts[g-1];
+        if(prev && cur && prev.type==="note" && cur.type==="note" && prevStartedOffBeat && !prev.tieToNext && Math.random()<eff.syncProb*0.5){
           cur.midi = prev.midi;
           prev.tieToNext = true;
           cur.tiedFromPrev = true;
@@ -785,16 +781,15 @@
     });
   }
 
-  // Cross-bar ties can only be decided once we know which bars land on the
-  // same printed row (a tie can't visually jump from the end of one line to
-  // the start of the next), so this runs from renderSong after layout,
-  // gated by canTieAfter(barIndex).
-  function applyCrossBarSyncTies(barsArr, eff, canTieAfter){
+  function applyCrossBarSyncTies(barsArr, eff){
     for(var b=0; b<barsArr.length-1; b++){
-      if(!canTieAfter(b)) continue;
-      var last = barsArr[b].notes[barsArr[b].notes.length-1];
+      var barA = barsArr[b];
+      var lastIdx = barA.notes.length-1;
+      var lastGroupStart = barA.groupStartIdx[barA.groupStartIdx.length-1];
+      var prevStartedOffBeat = lastIdx !== lastGroupStart;
+      var last = barA.notes[lastIdx];
       var first = barsArr[b+1].notes[0];
-      if(last && first && last.type==="note" && first.type==="note" && !last.tieToNext && Math.random()<eff.syncProb*0.4){
+      if(last && first && last.type==="note" && first.type==="note" && prevStartedOffBeat && !last.tieToNext && Math.random()<eff.syncProb*0.4){
         first.midi = last.midi;
         last.tieToNext = true;
         first.tiedFromPrev = true;
@@ -833,220 +828,192 @@
       prevMidi = built.lastMidi;
     }
     applyIntraBarSyncTies(barsArr, eff);
+    applyCrossBarSyncTies(barsArr, eff);
 
-    return {
+    var sng = {
       key:{name:key.name, vfKey:key.vfKey, pc:key.pc, accidentals:key.acc},
       instrument:instrument.id, clef:instrument.clef, genType:genType, tempoBpm:tempo, barCount:barCount, difficulty:d,
       timeSig:{num:timeSig.num, den:timeSig.den, groups:timeSig.groups},
       bars:barsArr, spellTable:spellTable, eff:eff
     };
+    buildPlaybackData(sng);
+    return sng;
   }
 
-  // ================= RENDERING (VexFlow) =================
-  // Unit = one 16th note (16 units = a whole note). Dotted values are
-  // expressed with VexFlow's "d" duration-suffix convention so the tick
-  // value (used for Voice validation) is correct automatically; Dot.buildAndAttach
-  // only adds the visual dot glyph on top.
-  var UNIT_DURSPEC = {1:"16", 2:"8", 3:"8d", 4:"q", 6:"qd", 8:"h", 12:"hd", 16:"w"};
-  function isDottedDur(durStr){ return durStr.indexOf("d")>-1; }
-  function isBeamableDur(durStr){ return /^(8|16)d?$/.test(durStr); }
-
-  function buildBarVoice(bar, sng){
-    var vfNotes = [], meta = [];
-    bar.notes.forEach(function(n, ni){
-      var durStr = UNIT_DURSPEC[n.dur];
-      var vfNote;
-      if(n.type==="rest"){
-        vfNote = new Vex.Flow.StaveNote({clef:sng.clef, keys:["b/4"], duration:durStr+"r"});
-      }else{
-        var sp = sng.spellTable[((n.midi%12)+12)%12];
-        var keyStr = vfKeyString(n.midi + WRITTEN_OCTAVE_OFFSET, sp.letter, sp.acc);
-        vfNote = new Vex.Flow.StaveNote({clef:sng.clef, keys:[keyStr], duration:durStr});
-      }
-      if(isDottedDur(durStr)) Vex.Flow.Dot.buildAndAttach([vfNote], {all:true});
-      var gi = 0;
-      for(var q=bar.groupStartIdx.length-1; q>=0; q--){ if(ni>=bar.groupStartIdx[q]){ gi=q; break; } }
-      meta.push({groupIdx:gi, beamable: n.type==="note" && isBeamableDur(durStr)});
-      vfNotes.push(vfNote);
+  // Playback data is derived purely from the generated data model, so it's
+  // available synchronously -- it doesn't need to wait on the (async)
+  // notation render.
+  function buildPlaybackData(sng){
+    var attacks = [], clicks = [], cursorSteps = [];
+    var unitCursor = 0;
+    sng.bars.forEach(function(bar){
+      var barStartUnit = unitCursor;
+      bar.notes.forEach(function(n){
+        cursorSteps.push({startUnits:unitCursor});
+        if(!n.tiedFromPrev){
+          attacks.push({midi:n.type==="note"?n.midi:null, isRest:n.type==="rest", startUnits:unitCursor, dur:n.dur});
+        }
+        unitCursor += n.dur;
+      });
+      var goff = 0;
+      sng.timeSig.groups.forEach(function(kind, gi){
+        clicks.push({startUnits: barStartUnit+goff, accent: gi===0});
+        goff += groupUnits(kind);
+      });
     });
-    var voice = new Vex.Flow.Voice({num_beats:sng.timeSig.num, beat_value:sng.timeSig.den});
-    voice.addTickables(vfNotes);
-    Vex.Flow.Accidental.applyAccidentals([voice], sng.key.vfKey);
-    return {voice:voice, vfNotes:vfNotes, meta:meta};
+    sng.attacks = attacks;
+    sng.clicks = clicks;
+    sng.cursorSteps = cursorSteps;
+    sng.totalUnits = unitCursor;
   }
 
-  function measureStaveOverhead(clef, vfKey, timeSigStr, ctx){
-    try{
-      var tmp = new Vex.Flow.Stave(0, 0, 600);
-      tmp.setContext(ctx);
-      tmp.addClef(clef);
-      tmp.addKeySignature(vfKey);
-      if(timeSigStr) tmp.addTimeSignature(timeSigStr);
-      return (tmp.getNoteStartX() - tmp.getX()) + 8;
-    }catch(e){
-      return timeSigStr ? 100 : 74;
+  // ================= NOTATION (MusicXML -> OpenSheetMusicDisplay) =================
+  // OSMD is a full engraving engine (line-breaking, justification, beaming,
+  // ties, rest placement) built on MusicXML, so instead of hand-rolling that
+  // layout logic we describe the music precisely and let it do the drawing.
+  // Unit = one 16th note; MusicXML <divisions> is set to 4 (ticks per
+  // quarter note), which makes a unit and a division exactly the same
+  // number -- durations pass straight through with no conversion.
+  var MXML_NOTE_TYPE = {1:"16th", 2:"eighth", 3:"eighth", 4:"quarter", 6:"quarter", 8:"half", 12:"half", 16:"whole"};
+  var MXML_DOTTED = {3:1, 6:1, 12:1};
+  function isBeamableUnit(u){ return u===1 || u===2 || u===3; }
+
+  // Beam state for one contiguous run of beamable notes within a single
+  // beat. We compute this ourselves (rather than asking a library to infer
+  // it) so a figure like [eighth,16th,16th,eighth] always gets one primary
+  // beam across all four notes plus a secondary beam/hook only where a
+  // sixteenth actually needs one -- never split into separate flagged
+  // fragments.
+  function computeBeamTags(durs){
+    var n = durs.length;
+    var level1 = new Array(n), level2 = new Array(n);
+    for(var i=0;i<n;i++) level1[i] = (n===1) ? null : (i===0?"begin":(i===n-1?"end":"continue"));
+    for(var i=0;i<n;i++){
+      if(durs[i]!==1){ level2[i]=null; continue; }
+      var prevIs16 = i>0 && durs[i-1]===1;
+      var nextIs16 = i<n-1 && durs[i+1]===1;
+      if(prevIs16 && nextIs16) level2[i]="continue";
+      else if(!prevIs16 && nextIs16) level2[i]="begin";
+      else if(prevIs16 && !nextIs16) level2[i]="end";
+      else level2[i] = (i===0) ? "forward hook" : "backward hook";
     }
+    return {level1:level1, level2:level2};
+  }
+
+  function songToMusicXML(sng){
+    var keyDef = KEY_BY_NAME[sng.key.name];
+    var fifths = keyDef.sharpPref ? keyDef.acc : -keyDef.acc;
+    var clefSign = sng.clef==="bass" ? "F" : "G";
+    var clefLine = sng.clef==="bass" ? 4 : 2;
+    var p = [];
+    p.push('<?xml version="1.0" encoding="UTF-8"?>');
+    p.push('<score-partwise version="3.1">');
+    p.push('<part-list><score-part id="P1"><part-name print-object="no">Line</part-name></score-part></part-list>');
+    p.push('<part id="P1">');
+
+    sng.bars.forEach(function(bar, bi){
+      p.push('<measure number="'+(bi+1)+'">');
+      if(bi===0){
+        p.push('<attributes><divisions>4</divisions>'
+          +'<key><fifths>'+fifths+'</fifths><mode>major</mode></key>'
+          +'<time><beats>'+sng.timeSig.num+'</beats><beat-type>'+sng.timeSig.den+'</beat-type></time>'
+          +'<clef><sign>'+clefSign+'</sign><line>'+clefLine+'</line></clef>'
+          +'</attributes>');
+        p.push('<direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>'
+          +sng.tempoBpm+'</per-minute></metronome></direction-type><sound tempo="'+sng.tempoBpm+'"/></direction>');
+      }
+
+      // Precompute beam tags per note index, one contiguous beamable run per beat.
+      var beamTagsByIdx = {};
+      bar.groupStartIdx.forEach(function(startIdx, gi){
+        var endIdx = (gi+1<bar.groupStartIdx.length) ? bar.groupStartIdx[gi+1] : bar.notes.length;
+        var runIdxs = [], runDurs = [];
+        for(var ni=startIdx; ni<endIdx; ni++){
+          var n = bar.notes[ni];
+          if(n.type==="note" && isBeamableUnit(n.dur)){ runIdxs.push(ni); runDurs.push(n.dur); }
+        }
+        if(runIdxs.length>1){
+          var tags = computeBeamTags(runDurs);
+          runIdxs.forEach(function(ni, k){ beamTagsByIdx[ni] = {level1:tags.level1[k], level2:tags.level2[k]}; });
+        }
+      });
+
+      bar.notes.forEach(function(n, ni){
+        var type = MXML_NOTE_TYPE[n.dur];
+        var dotted = !!MXML_DOTTED[n.dur];
+        p.push('<note>');
+        if(n.type==="rest"){
+          p.push('<rest/>');
+        }else{
+          var sp = sng.spellTable[((n.midi%12)+12)%12];
+          var writtenMidi = n.midi + WRITTEN_OCTAVE_OFFSET;
+          var octave = Math.floor((writtenMidi - sp.acc)/12) - 1;
+          p.push('<pitch><step>'+sp.letter+'</step>'+(sp.acc?('<alter>'+sp.acc+'</alter>'):'')+'<octave>'+octave+'</octave></pitch>');
+        }
+        p.push('<duration>'+n.dur+'</duration>');
+        if(n.tiedFromPrev) p.push('<tie type="stop"/>');
+        if(n.tieToNext) p.push('<tie type="start"/>');
+        p.push('<voice>1</voice>');
+        p.push('<type>'+type+'</type>');
+        if(dotted) p.push('<dot/>');
+        var bt = beamTagsByIdx[ni];
+        if(bt){
+          if(bt.level1) p.push('<beam number="1">'+bt.level1+'</beam>');
+          if(bt.level2) p.push('<beam number="2">'+bt.level2+'</beam>');
+        }
+        if(n.tiedFromPrev || n.tieToNext){
+          p.push('<notations>');
+          if(n.tiedFromPrev) p.push('<tied type="stop"/>');
+          if(n.tieToNext) p.push('<tied type="start"/>');
+          p.push('</notations>');
+        }
+        p.push('</note>');
+      });
+
+      p.push('</measure>');
+    });
+
+    p.push('</part></score-partwise>');
+    return p.join('');
+  }
+
+  var osmd = null;
+  function currentInk(){
+    return getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || "#211C14";
+  }
+  function ensureOsmd(){
+    if(osmd) return osmd;
+    osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay("osmdContainer", {
+      backend: "canvas",
+      autoResize: true,
+      drawTitle: false,
+      drawPartNames: false,
+      drawMetronomeMarks: true
+    });
+    return osmd;
   }
 
   function renderSong(sng){
-    var wrap = $("notationWrap");
-    var canvasEl = $("notationCanvas"), hlEl = $("highlightCanvas");
-    var canvasWidth = Math.max(360, wrap.clientWidth - 20);
-
-    var renderer = new Vex.Flow.Renderer(canvasEl, Vex.Flow.Renderer.Backends.CANVAS);
-    canvasEl.width = canvasWidth; canvasEl.height = 300;
-    renderer.resize(canvasWidth, 300);
-    var mctx = renderer.getContext();
-
-    var timeSigStr = sng.timeSig.num+"/"+sng.timeSig.den;
-    var rowStartOverhead = measureStaveOverhead(sng.clef, sng.key.vfKey, null, mctx);
-    var firstBarOverhead = measureStaveOverhead(sng.clef, sng.key.vfKey, timeSigStr, mctx);
-
-    var BAR_PAD = 30, MIN_BAR_W = 90;
-    var built0 = sng.bars.map(function(bar){ return buildBarVoice(bar, sng); });
-    var minWidths = built0.map(function(b){
-      try{
-        var f = new Vex.Flow.Formatter();
-        f.joinVoices([b.voice]);
-        return Math.max(MIN_BAR_W, f.preCalculateMinTotalWidth([b.voice]));
-      }catch(e){
-        return Math.max(MIN_BAR_W, b.vfNotes.length*36);
-      }
+    var inst = ensureOsmd();
+    var xml = songToMusicXML(sng);
+    return inst.load(xml).then(function(){
+      inst.EngravingRules.DefaultColorMusic = currentInk();
+      inst.render();
+    }).catch(function(err){
+      console.error("Notation render failed:", err);
     });
+  }
 
-    // Greedy row packing: each bar gets exactly the width its content needs
-    // (plus padding), so the formatter is never squeezed into less space
-    // than it asked for -- that squeeze is what let notes overflow past the
-    // barline into the next measure.
-    var rows = [];
-    var current = null;
-    for(var i=0;i<sng.barCount;i++){
-      var overhead = current ? 0 : (i===0?firstBarOverhead:rowStartOverhead);
-      var w = minWidths[i] + BAR_PAD + overhead;
-      if(current && current.bars.length>0 && current.width + w > canvasWidth){
-        rows.push(current);
-        current = null;
-        overhead = rowStartOverhead;
-        w = minWidths[i] + BAR_PAD + overhead;
-      }
-      if(!current) current = {bars:[], barWidths:[], width:0};
-      current.bars.push(i);
-      current.barWidths.push(w);
-      current.width += w;
-    }
-    if(current) rows.push(current);
-
-    // Only now do we know which bars end a printed row -- a tie can't jump
-    // from the end of one line to the start of the next, so gate the
-    // cross-bar syncopation pass on that.
-    var rowEndBar = {};
-    rows.forEach(function(row){ rowEndBar[row.bars[row.bars.length-1]] = true; });
-    applyCrossBarSyncTies(sng.bars, sng.eff, function(b){ return !rowEndBar[b]; });
-
-    var neededWidth = canvasWidth;
-    rows.forEach(function(r){ if(r.width>neededWidth) neededWidth = r.width; });
-
-    var rowH = 140, topMargin = 40;
-    var totalH = rows.length*rowH + topMargin;
-
-    canvasEl.width = neededWidth; canvasEl.height = totalH;
-    hlEl.width = neededWidth; hlEl.height = totalH;
-    canvasEl.style.width = neededWidth+"px"; canvasEl.style.height = totalH+"px";
-    hlEl.style.width = neededWidth+"px"; hlEl.style.height = totalH+"px";
-    renderer.resize(neededWidth, totalH);
-    var ctx = renderer.getContext();
-    var ink = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || "#211C14";
-    ctx.setFillStyle(ink); ctx.setStrokeStyle(ink);
-    ctx.clear();
-
-    var flat = []; // one entry per StaveNote, in draw order (for ties)
-    var attacks = []; // one entry per audio/highlight attack
-    var clicks = []; // one entry per metronome beat
-    var unitCursor = 0;
-
-    rows.forEach(function(row, rowIdx){
-      var x = 0;
-      var y = topMargin + rowIdx*rowH;
-      row.bars.forEach(function(barIdx, colIdx){
-        var barW = row.barWidths[colIdx];
-        var bar = sng.bars[barIdx];
-        var built = buildBarVoice(bar, sng); // fresh instances for the real draw pass
-        var stave = new Vex.Flow.Stave(x, y, barW);
-        if(colIdx===0){
-          stave.addClef(sng.clef);
-          stave.addKeySignature(sng.key.vfKey);
-        }
-        if(barIdx===0){
-          stave.addTimeSignature(timeSigStr);
-          stave.setTempo({duration:"q", dots:0, bpm:sng.tempoBpm}, 0);
-        }
-        stave.setContext(ctx).draw();
-
-        var barStartUnit = unitCursor;
-        var groupBeamables = bar.groupStartIdx.map(function(){ return []; });
-        built.vfNotes.forEach(function(vfNote, ni){
-          var n = bar.notes[ni];
-          var meta = built.meta[ni];
-          flat.push({vfNote:vfNote, tieToNext: !!n.tieToNext});
-          if(!n.tiedFromPrev){
-            attacks.push({midi:n.type==="note"?n.midi:null, isRest:n.type==="rest", startUnits:unitCursor, dur:n.dur, vfNote:vfNote});
-          }
-          if(meta.beamable) groupBeamables[meta.groupIdx].push(vfNote);
-          unitCursor += n.dur;
-        });
-
-        var formatter = new Vex.Flow.Formatter();
-        formatter.joinVoices([built.voice]).format([built.voice], Math.max(20, barW - BAR_PAD), {align_rests:true});
-        built.voice.draw(ctx, stave);
-
-        groupBeamables.forEach(function(arr){
-          // Build the beam directly over our own per-beat grouping rather than
-          // Beam.generateBeams(), which re-splits into its own default 2/8-tick
-          // chunks and chops a beat like [8th,16th,16th,8th] into two pieces
-          // (leaving the outer notes with stray individual flags).
-          if(arr.length>1){
-            try{
-              var beam = new Vex.Flow.Beam(arr);
-              beam.setContext(ctx).draw();
-            }catch(e){}
-          }
-        });
-
-        var goff = 0;
-        sng.timeSig.groups.forEach(function(kind, gi){
-          clicks.push({startUnits: barStartUnit+goff, accent: gi===0});
-          goff += groupUnits(kind);
-        });
-
-        x += barW;
-      });
-    });
-
-    for(var k=0;k<flat.length;k++){
-      if(flat[k].tieToNext && flat[k+1]){
-        try{
-          var tie = new Vex.Flow.StaveTie({first_note:flat[k].vfNote, last_note:flat[k+1].vfNote});
-          tie.setContext(ctx).draw();
-        }catch(e){}
-      }
-    }
-
-    attacks.forEach(function(a){
-      try{
-        var bb = a.vfNote.getBoundingBox();
-        a.box = {x:bb.x, y:bb.y, w:bb.w, h:bb.h};
-      }catch(e){ a.box = null; }
-    });
-
-    sng.attacks = attacks;
-    sng.clicks = clicks;
-    sng.totalUnits = unitCursor;
+  function redrawColors(){
+    if(!osmd || !osmd.Sheet) return;
+    osmd.EngravingRules.DefaultColorMusic = currentInk();
+    osmd.render();
   }
 
   // ================= AUDIO =================
   var actx=null, master=null, lp=null, noteBus=null;
   var playing=false, scheduler=null, rafId=null;
-  var stepCounter=0, nextStepTime=0, attackCursor=0, clickCursor=0;
+  var stepCounter=0, nextStepTime=0, attackCursor=0, clickCursor=0, cursorStepIdx=0;
   var playhead=[], live=[];
 
   function ensureAudio(){
@@ -1105,7 +1072,6 @@
       var att = song.attacks[attackCursor];
       if(att && att.startUnits===stepCounter){
         if(!att.isRest) playNote(mtof(att.midi), nextStepTime, att.dur*s16*1.05);
-        playhead.push({t:nextStepTime, box:att.box});
         attackCursor++;
       }
       var clk = song.clicks[clickCursor];
@@ -1113,16 +1079,13 @@
         if(metroToggle.checked) playClick(nextStepTime, clk.accent);
         clickCursor++;
       }
+      while(cursorStepIdx+1 < song.cursorSteps.length && song.cursorSteps[cursorStepIdx+1].startUnits===stepCounter){
+        cursorStepIdx++;
+        playhead.push({t:nextStepTime, advanceCursor:true});
+      }
       stepCounter++;
       nextStepTime += s16;
     }
-  }
-  function paintHighlight(box){
-    var hc = $("highlightCanvas").getContext("2d");
-    hc.clearRect(0,0,hc.canvas.width,hc.canvas.height);
-    if(!box) return;
-    hc.fillStyle = "rgba(198,123,58,0.30)";
-    hc.fillRect(box.x-4, box.y-6, box.w+8, box.h+12);
   }
   function renderLoop(){
     if(actx){
@@ -1130,7 +1093,7 @@
       while(playhead.length && playhead[0].t<=now+0.001){
         var ev=playhead.shift();
         if(ev.done){ stopPlayback(); return; }
-        paintHighlight(ev.box);
+        if(ev.advanceCursor && osmd && osmd.cursor){ try{ osmd.cursor.next(); }catch(e){} }
       }
     }
     if(playing) rafId=requestAnimationFrame(renderLoop);
@@ -1148,14 +1111,15 @@
     genBtn.disabled = on;
   }
   function startPlayback(){
-    if(!song) return;
+    if(!song || !osmd || !osmd.cursor) return;
     ensureAudio();
     if(actx.state==="suspended") actx.resume();
-    stepCounter=0; attackCursor=0; clickCursor=0;
+    stepCounter=0; attackCursor=0; clickCursor=0; cursorStepIdx=0;
     nextStepTime = actx.currentTime+0.15;
     playhead=[];
     playing=true;
     setPlayUI(true);
+    try{ osmd.cursor.reset(); osmd.cursor.show(); }catch(e){}
     schedule();
     scheduler=setInterval(schedule,25);
     rafId=requestAnimationFrame(renderLoop);
@@ -1169,7 +1133,7 @@
       master.gain.cancelScheduledValues(actx.currentTime);
       hardStopNodes();
     }
-    paintHighlight(null);
+    if(osmd && osmd.cursor){ try{ osmd.cursor.hide(); }catch(e){} }
     setPlayUI(false);
   }
 
@@ -1286,10 +1250,15 @@
     store("sr-metro", metroToggle.checked?"1":"0");
   });
 
+  var tempoRenderTimer = null;
   tempoEl.addEventListener("input", function(){
     tempoVal.textContent = tempoEl.value;
     store("sr-tempo", tempoEl.value);
-    if(song){ song.tempoBpm = +tempoEl.value; renderSong(song); }
+    if(song){
+      song.tempoBpm = +tempoEl.value;
+      if(tempoRenderTimer) clearTimeout(tempoRenderTimer);
+      tempoRenderTimer = setTimeout(function(){ renderSong(song); }, 150);
+    }
   });
 
   function setBars(v){
@@ -1315,14 +1284,12 @@
   });
   pngBtn.addEventListener("click", function(){
     if(!song) return;
+    var canvasEl = document.querySelector("#osmdContainer canvas");
+    if(!canvasEl) return;
     var a = document.createElement("a");
     a.download = "sight-reading-"+song.genType+"-"+song.instrument+"-"+song.key.name+"-"+song.barCount+"bars.png";
-    a.href = $("notationCanvas").toDataURL("image/png");
+    a.href = canvasEl.toDataURL("image/png");
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  });
-
-  window.addEventListener("resize", function(){
-    if(song) renderSong(song);
   });
 
   // ---- theme ----
@@ -1334,7 +1301,7 @@
     var cur = document.documentElement.getAttribute("data-theme");
     var next = cur==="dark" ? "light" : "dark";
     applyTheme(next); store("theme", next);
-    if(song) renderSong(song);
+    redrawColors();
   });
 
   // ---- restore ----
