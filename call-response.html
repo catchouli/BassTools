@@ -1,0 +1,1738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Call &amp; Response Practice</title>
+<link rel="icon" href="favicon.ico">
+<meta name="description" content="A procedurally generated call-and-response ear trainer for bass and guitar: pick a key and difficulty, hear a short generated phrase, then play it back in the matching blank bars while it loops, entirely in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --ground:#F2ECDE;
+    --panel:#FBF7EE;
+    --panel-2:#EDE6D6;
+    --ink:#211C14;
+    --ink-soft:#6A6152;
+    --ink-faint:#948B79;
+    --line:#DBD1BC;
+    --amber:#A85A24;
+    --amber-lit:#C67B3A;
+    --amber-glow:rgba(198,123,58,.16);
+    --sage:#5E7A54;
+    --sage-soft:#E7EEDD;
+    --shadow:24px 28px 60px -28px rgba(58,42,18,.35);
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --ground:#141109;
+      --panel:#1D1811;
+      --panel-2:#262017;
+      --ink:#F0E6D2;
+      --ink-soft:#A0947F;
+      --ink-faint:#6F6552;
+      --line:#332B1F;
+      --amber:#D2843F;
+      --amber-lit:#E7A65E;
+      --amber-glow:rgba(231,166,94,.14);
+      --sage:#8BA87F;
+      --sage-soft:#26301F;
+      --shadow:none;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#141109;
+    --panel:#1D1811;
+    --panel-2:#262017;
+    --ink:#F0E6D2;
+    --ink-soft:#A0947F;
+    --ink-faint:#6F6552;
+    --line:#332B1F;
+    --amber:#D2843F;
+    --amber-lit:#E7A65E;
+    --amber-glow:rgba(231,166,94,.14);
+    --sage:#8BA87F;
+    --sage-soft:#26301F;
+    --shadow:none;
+  }
+
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--ground);
+    color:var(--ink);
+    font-family:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+    font-size:15px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1060px;margin:0 auto;padding:26px 22px 60px}
+
+  header.top{
+    display:flex;align-items:baseline;justify-content:space-between;
+    gap:18px;flex-wrap:wrap;
+    border-bottom:1px solid var(--line);
+    padding-bottom:16px;margin-bottom:26px;
+  }
+  .brand{display:flex;align-items:baseline;gap:12px}
+  .lamp{
+    width:9px;height:9px;border-radius:50%;
+    background:var(--amber-lit);align-self:center;
+    box-shadow:0 0 0 3px var(--amber-glow);flex:none;
+  }
+  .wordmark{
+    font-family:"Fraunces","Georgia",serif;
+    font-weight:900;font-size:25px;letter-spacing:-.01em;
+    color:inherit;text-decoration:none;
+  }
+  .wordmark b{font-weight:900;color:var(--amber)}
+  .tagline{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink-faint);
+  }
+  .theme-btn{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:12px;letter-spacing:.08em;
+    background:transparent;color:var(--ink-soft);
+    border:1px solid var(--line);border-radius:999px;
+    padding:5px 12px;cursor:pointer;
+  }
+  .theme-btn:hover{color:var(--ink);border-color:var(--ink-faint)}
+
+  .lede{max-width:66ch;color:var(--ink-soft);margin:0 0 24px}
+  .lede strong{color:var(--ink);font-weight:600}
+
+  .console{
+    position:relative;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:16px;
+    box-shadow:var(--shadow);
+    padding:22px;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(260px,340px);
+    gap:26px;
+  }
+  @media (max-width:860px){
+    .console{grid-template-columns:1fr;gap:22px;padding:18px}
+  }
+
+  .expand-btn{
+    position:absolute;top:8px;right:10px;z-index:5;
+    width:28px;height:28px;padding:0;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--panel-2);color:var(--ink-soft);
+    border:1px solid var(--line);border-radius:7px;
+    cursor:pointer;font-size:13px;line-height:1;
+  }
+  .expand-btn:hover{color:var(--ink);border-color:var(--ink-faint)}
+  .console.expanded{
+    position:fixed;inset:0;z-index:1000;
+    width:100vw;height:100vh;
+    border-radius:0;box-shadow:none;
+    overflow:auto;
+  }
+
+  .notation-panel{display:flex;flex-direction:column;gap:14px;min-width:0}
+  .notation-wrap{
+    position:relative;background:var(--panel-2);
+    border:1px solid var(--line);border-radius:12px;
+    padding:10px;overflow-x:auto;
+  }
+  /* Two stacked staves: the phrase being played/echoed on top, and -- only
+     while the loop runs -- a dimmed preview of the NEXT phrase below it. At
+     the end of each call+response the top staff collapses out of existence
+     and the preview rises into its place. */
+  .nstack{display:flex;flex-direction:column;gap:12px}
+  .nslot{
+    position:relative;
+    transition:opacity .4s ease, max-height .28s ease, transform .28s ease;
+    max-height:320px;
+  }
+  .nslot.preview{opacity:.42}
+  .nslot.popping{opacity:0;max-height:0;transform:translateY(-14px);pointer-events:none}
+  #osmd0,#osmd1{min-height:120px}
+  #osmd0 canvas,#osmd1 canvas{display:block}
+  /* OSMD's playback cursor is an <img> with an inline z-index:-1, which
+     renders it behind this panel's own background instead of over the
+     notation -- force it back above the canvas. */
+  .nslot img{z-index:1!important;opacity:.5}
+  .next-tag{
+    position:absolute;top:2px;right:6px;z-index:2;
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--sage);pointer-events:none;display:none;
+  }
+  .nslot.preview .next-tag{display:block}
+  .notation-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .btn{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:12.5px;letter-spacing:.04em;
+    background:var(--panel-2);color:var(--ink);
+    border:1px solid var(--line);border-radius:9px;
+    padding:9px 14px;cursor:pointer;
+  }
+  .btn:hover{border-color:var(--ink-faint)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+
+  .controls{display:flex;flex-direction:column;gap:20px;min-width:0;padding-top:8px}
+  .grp{display:flex;flex-direction:column;gap:9px}
+  .grp-label{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--ink-faint);
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+  }
+
+  .select{
+    font-family:"IBM Plex Sans",sans-serif;
+    font-size:13.5px;color:var(--ink);
+    background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+    padding:9px 12px;cursor:pointer;width:100%;
+  }
+  .select:hover{border-color:var(--ink-faint)}
+  .console.locked .select{cursor:not-allowed;opacity:.55;pointer-events:none}
+
+  .check-row{display:flex;align-items:center;gap:9px;cursor:pointer;font-size:13px;color:var(--ink-soft)}
+  .check-row input{width:17px;height:17px;accent-color:var(--amber-lit);cursor:pointer;flex:none}
+  .check-row:hover{color:var(--ink)}
+  .console.locked .check-row{cursor:not-allowed;opacity:.55;pointer-events:none}
+
+  .choice-row{display:flex;flex-wrap:wrap;align-items:center;gap:7px}
+  .choice-row input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+  .choice-row label{
+    display:block;padding:7px 12px;border-radius:999px;cursor:pointer;
+    white-space:nowrap;font-size:12.5px;color:var(--ink-soft);
+    border:1px solid var(--line);background:var(--panel-2);
+    transition:background .15s,color .15s,border-color .15s;
+  }
+  .choice-row label:hover{border-color:var(--ink-faint);color:var(--ink)}
+  .choice-row input:checked+label{background:var(--amber);color:#fff;border-color:var(--amber);font-weight:500}
+  .choice-row input:focus-visible+label{outline:2px solid var(--amber-lit);outline-offset:2px}
+  .console.locked .choice-row label{cursor:not-allowed;opacity:.55}
+
+  .slider-row{display:flex;align-items:center;gap:14px}
+  input[type=range]{flex:1;min-width:0;accent-color:var(--amber-lit);height:22px;cursor:pointer}
+  .readout{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-variant-numeric:tabular-nums;
+    font-size:16px;font-weight:500;min-width:70px;text-align:right;
+  }
+  .readout small{font-size:11px;color:var(--ink-faint);letter-spacing:.06em}
+  .tier-label{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:11.5px;color:var(--ink-soft);
+  }
+  .phase-badge{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    padding:4px 10px;border-radius:999px;border:1px solid var(--line);
+    white-space:nowrap;
+  }
+  .phase-badge.call{color:#fff;background:var(--amber);border-color:var(--amber)}
+  .phase-badge.response{color:var(--sage);background:var(--sage-soft);border-color:var(--sage)}
+  .phase-badge.countin{color:var(--ink-soft);background:var(--panel-2)}
+
+  .two-col{display:flex;gap:16px;flex-wrap:wrap}
+  .two-col .col{display:flex;flex-direction:column;gap:9px;min-width:0}
+  .two-col .col.grow{flex:1}
+
+  .stepper{display:flex;align-items:center;gap:0;width:fit-content}
+  .stepper button{
+    width:38px;height:38px;font-size:19px;line-height:1;
+    background:var(--panel-2);color:var(--ink);
+    border:1px solid var(--line);cursor:pointer;
+  }
+  .stepper button:first-child{border-radius:9px 0 0 9px}
+  .stepper button:last-child{border-radius:0 9px 9px 0}
+  .stepper button:hover{border-color:var(--ink-faint)}
+  .stepper button:disabled{opacity:.4;cursor:not-allowed}
+  .stepper .val{
+    width:56px;height:38px;display:flex;align-items:center;justify-content:center;
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+    font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:16px;
+    font-variant-numeric:tabular-nums;background:var(--panel);
+  }
+
+  .disclosure{
+    background:transparent;border:none;color:var(--ink-soft);
+    font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;
+    letter-spacing:.1em;text-transform:uppercase;cursor:pointer;padding:0;
+  }
+  .disclosure:hover{color:var(--ink)}
+  .adv-panel{
+    display:flex;flex-direction:column;gap:14px;
+    padding:14px 14px 4px;margin-top:2px;
+    border:1px dashed var(--line);border-radius:10px;
+    background:var(--panel-2);
+  }
+  .adv-panel .grp-label{font-size:10.5px}
+  .reset-link{
+    background:transparent;border:none;color:var(--amber);
+    font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;
+    text-decoration:underline;cursor:pointer;padding:0;align-self:flex-start;
+  }
+
+  .play{
+    margin-top:2px;
+    width:100%;padding:15px;border:none;border-radius:11px;cursor:pointer;
+    background:var(--amber);color:#fff;
+    font-family:"Fraunces","Georgia",serif;font-weight:900;
+    font-size:18px;letter-spacing:.01em;
+    display:flex;align-items:center;justify-content:center;gap:10px;
+    transition:background .15s,transform .06s;
+  }
+  .play:hover{background:var(--amber-lit)}
+  .play:active{transform:translateY(1px)}
+  .play:focus-visible{outline:3px solid var(--amber-lit);outline-offset:3px}
+  .play.playing{background:var(--panel-2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+  .play.secondary{background:var(--sage)}
+  .play.secondary:hover{background:var(--sage)}
+  .play .glyph{font-family:"IBM Plex Sans",sans-serif;font-size:14px}
+
+  footer{
+    margin-top:34px;font-size:12px;color:var(--ink-faint);
+    border-top:1px solid var(--line);padding-top:14px;max-width:62ch;
+  }
+
+  @media (max-width:600px){
+    .wrap{padding:18px 13px 44px}
+    header.top{gap:12px;margin-bottom:20px}
+    .tagline{display:none}
+    .lede{margin-bottom:20px}
+    .console{padding:16px;gap:20px}
+    .controls{gap:18px}
+    .segmented label{padding:12px 3px;font-size:12px}
+    .choice-row{gap:8px}
+    .choice-row label{padding:10px 13px}
+    input[type=range]{height:30px}
+    .stepper button,.stepper .val{height:42px}
+    footer{margin-top:28px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    .btn,.play{transition:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <span class="lamp" aria-hidden="true"></span>
+      <a class="wordmark" href="index.html">Bass<b>Tools</b></a>
+      <span class="tagline">Bass practice tools</span>
+    </div>
+    <button class="theme-btn" id="themeBtn" type="button">Theme</button>
+  </header>
+
+  <p class="lede">
+    <strong>Call &amp; Response Practice.</strong> Plays a short generated phrase, then gives you
+    the same number of blank bars to play it back &mdash; then a new phrase, on a loop. Same
+    generator as Sight Reading (chord progressions, a difficulty-tiered rhythm library,
+    voice-leading), fixed to one key. Pick a key and a difficulty, set your count-in, press Start.
+  </p>
+
+  <div class="console" id="console">
+    <button class="expand-btn" id="expandBtn" type="button" aria-label="Expand to fill screen" aria-pressed="false">&#10530;</button>
+    <div class="notation-panel">
+      <div class="notation-wrap" id="notationWrap">
+        <div class="nstack" id="nstack">
+          <div class="nslot" id="nslot0"><span class="next-tag">next phrase</span><div id="osmd0"></div></div>
+          <div class="nslot" id="nslot1" hidden><span class="next-tag">next phrase</span><div id="osmd1"></div></div>
+        </div>
+      </div>
+      <div class="notation-actions">
+        <span class="phase-badge" id="phaseBadge" hidden></span>
+        <span class="tier-label" id="genInfo"></span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="grp">
+        <div class="two-col">
+          <div class="col grow">
+            <span class="grp-label">Instrument</span>
+            <select class="select" id="instrument">
+              <option value="bass4">4-String Bass</option>
+              <option value="bass5">5-String Bass</option>
+              <option value="guitar6">6-String Guitar</option>
+            </select>
+          </div>
+          <div class="col">
+            <span class="grp-label">Generate</span>
+            <div class="choice-row" id="genTypeRow">
+              <input type="radio" name="genType" id="gt-bassline" value="bassline" checked><label for="gt-bassline">Bassline</label>
+              <input type="radio" name="genType" id="gt-melody" value="melody"><label for="gt-melody">Melody</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grp">
+        <span class="grp-label">Key</span>
+        <select class="select" id="key"></select>
+      </div>
+
+      <div class="grp">
+        <span class="grp-label">
+          Difficulty
+          <button class="disclosure" id="advToggle" type="button" aria-expanded="false">Advanced &#9656;</button>
+        </span>
+        <div class="slider-row">
+          <input type="range" id="diff" min="1" max="100" step="1" value="25" aria-label="Difficulty">
+          <span class="readout"><span id="diffVal">25</span></span>
+        </div>
+        <span class="tier-label" id="diffTier"></span>
+
+        <div class="adv-panel" id="advPanel" hidden>
+          <div class="grp">
+            <span class="grp-label">Variability</span>
+            <div class="slider-row">
+              <input type="range" id="k-var" min="0" max="100" step="1" value="50" aria-label="Phrase variability">
+              <span class="readout"><span id="k-var-val">50</span>%</span>
+            </div>
+            <span class="tier-label" id="varTier"></span>
+          </div>
+          <div class="grp">
+            <span class="grp-label">Rest probability</span>
+            <div class="slider-row">
+              <input type="range" id="k-rest" min="0" max="35" step="1" value="0">
+              <span class="readout"><span id="k-rest-val">0</span>%</span>
+            </div>
+          </div>
+          <div class="grp">
+            <span class="grp-label">Syncopation</span>
+            <div class="slider-row">
+              <input type="range" id="k-sync" min="0" max="50" step="1" value="0">
+              <span class="readout"><span id="k-sync-val">0</span>%</span>
+            </div>
+          </div>
+          <div class="grp">
+            <span class="grp-label">Leap size</span>
+            <div class="slider-row">
+              <input type="range" id="k-leap" min="15" max="60" step="1" value="15">
+              <span class="readout"><span id="k-leap-val">15</span>%</span>
+            </div>
+          </div>
+          <div class="grp">
+            <span class="grp-label">Extra accidentals</span>
+            <div class="slider-row">
+              <input type="range" id="k-acc" min="0" max="35" step="1" value="0">
+              <span class="readout"><span id="k-acc-val">0</span>%</span>
+            </div>
+          </div>
+          <div class="grp">
+            <span class="grp-label">Time signature variety</span>
+            <div class="slider-row">
+              <input type="range" id="k-tsig" min="0" max="100" step="1" value="0" aria-label="Time signature variety">
+              <span class="readout"><span id="k-tsig-val">0</span>%</span>
+            </div>
+          </div>
+          <button class="reset-link" id="advReset" type="button">Reset to difficulty</button>
+        </div>
+      </div>
+
+      <div class="grp">
+        <span class="grp-label">
+          Tempo
+          <button class="disclosure" id="volToggle" type="button" aria-expanded="false">Volume &#9656;</button>
+        </span>
+        <div class="slider-row">
+          <input type="range" id="tempo" min="40" max="160" step="1" value="80" aria-label="Beats per minute">
+          <span class="readout"><span id="tempoVal">80</span> <small>BPM</small></span>
+        </div>
+        <div class="adv-panel" id="volPanel" hidden>
+          <div class="grp">
+            <span class="grp-label">Note volume</span>
+            <div class="slider-row">
+              <input type="range" id="k-vol" min="0" max="100" step="1" value="100" aria-label="Note volume">
+              <span class="readout"><span id="k-vol-val">100</span>%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grp">
+        <div class="two-col">
+          <div class="col">
+            <span class="grp-label">Phrase length</span>
+            <div class="stepper">
+              <button type="button" id="barsMinus" aria-label="Shorter phrase">&minus;</button>
+              <span class="val" id="barsVal">1</span>
+              <button type="button" id="barsPlus" aria-label="Longer phrase">+</button>
+            </div>
+          </div>
+          <div class="col">
+            <span class="grp-label">Lead-in</span>
+            <div class="stepper">
+              <button type="button" id="leadMinus" aria-label="Fewer lead-in bars">&minus;</button>
+              <span class="val" id="leadVal">1</span>
+              <button type="button" id="leadPlus" aria-label="More lead-in bars">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grp">
+        <div class="two-col">
+          <label class="check-row"><input type="checkbox" id="legatoToggle" checked><span>Legato playback</span></label>
+        </div>
+      </div>
+
+      <button class="play" id="playBtn" type="button" aria-pressed="false">
+        <span class="glyph" aria-hidden="true">&#9654;</span><span id="playLabel">Start</span>
+      </button>
+    </div>
+  </div>
+
+  <footer>
+    Every phrase comes from a rules-based algorithm running in your browser &mdash; a chord
+    progression, a difficulty-tiered rhythm library, and voice-leading rules over the key you
+    pick. It plays each phrase once, then loops silently over the same bars for your response
+    before moving on to the next one, which fades in below while you play. Nothing is recorded
+    or sent anywhere.
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@2.1.2/build/opensheetmusicdisplay.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  var $ = function(id){ return document.getElementById(id); };
+
+  // ---- persistence ----
+  function store(k,v){ try{ localStorage.setItem("basstools-"+k, v); }catch(e){} }
+  function recall(k){ try{ return localStorage.getItem("basstools-"+k); }catch(e){ return null; } }
+
+  function clamp(v,lo,hi){ return Math.max(lo, Math.min(hi, v)); }
+
+  // ================= MUSIC THEORY =================
+  var LETTERS = ["C","D","E","F","G","A","B"];
+  var NATPC = {C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+  var KEY_TABLE = [
+    {name:"C",  vfKey:"C",  pc:0,  acc:0, sig:{}, sharpPref:true},
+    {name:"G",  vfKey:"G",  pc:7,  acc:1, sig:{F:1}, sharpPref:true},
+    {name:"D",  vfKey:"D",  pc:2,  acc:2, sig:{F:1,C:1}, sharpPref:true},
+    {name:"A",  vfKey:"A",  pc:9,  acc:3, sig:{F:1,C:1,G:1}, sharpPref:true},
+    {name:"E",  vfKey:"E",  pc:4,  acc:4, sig:{F:1,C:1,G:1,D:1}, sharpPref:true},
+    {name:"B",  vfKey:"B",  pc:11, acc:5, sig:{F:1,C:1,G:1,D:1,A:1}, sharpPref:true},
+    {name:"F",  vfKey:"F",  pc:5,  acc:1, sig:{B:-1}, sharpPref:false},
+    {name:"Bb", vfKey:"Bb", pc:10, acc:2, sig:{B:-1,E:-1}, sharpPref:false},
+    {name:"Eb", vfKey:"Eb", pc:3,  acc:3, sig:{B:-1,E:-1,A:-1}, sharpPref:false},
+    {name:"Ab", vfKey:"Ab", pc:8,  acc:4, sig:{B:-1,E:-1,A:-1,D:-1}, sharpPref:false},
+    {name:"Db", vfKey:"Db", pc:1,  acc:5, sig:{B:-1,E:-1,A:-1,D:-1,G:-1}, sharpPref:false},
+    {name:"Gb", vfKey:"Gb", pc:6,  acc:6, sig:{B:-1,E:-1,A:-1,D:-1,G:-1,C:-1}, sharpPref:false}
+  ];
+  var KEY_BY_NAME = {};
+  KEY_TABLE.forEach(function(k){ KEY_BY_NAME[k.name] = k; });
+  var KEY_NAMES = KEY_TABLE.map(function(k){ return k.name; });
+
+  function buildSpellTable(key){
+    var startIdx = LETTERS.indexOf(key.name.charAt(0));
+    var diatonic = [];
+    for(var d=0; d<7; d++){
+      var letter = LETTERS[(startIdx+d)%7];
+      var acc = key.sig[letter] || 0;
+      var pc = ((NATPC[letter] + acc) % 12 + 12) % 12;
+      diatonic.push({letter:letter, acc:acc, pc:pc});
+    }
+    var byPc = {};
+    diatonic.forEach(function(o){ byPc[o.pc] = o; });
+    var table = [];
+    for(var pc=0; pc<12; pc++){
+      if(byPc[pc]){ table[pc] = {letter:byPc[pc].letter, acc:byPc[pc].acc}; continue; }
+      var lower = byPc[(pc-1+12)%12], upper = byPc[(pc+1)%12];
+      if(key.sharpPref && lower) table[pc] = {letter:lower.letter, acc:lower.acc+1};
+      else if(upper) table[pc] = {letter:upper.letter, acc:upper.acc-1};
+      else if(lower) table[pc] = {letter:lower.letter, acc:lower.acc+1};
+      else table[pc] = {letter:"C", acc:0};
+    }
+    return table;
+  }
+
+  var DEGREE_INDEX = {I:0, ii:1, iii:2, IV:3, V:4, vi:5, vii:6};
+  var MAJOR_STEPS = [0,2,4,5,7,9,11];
+  var DEGREE_QUALITY = ["maj","min","min","maj","maj","min","dim"];
+  var TONES_BY_QUALITY = {maj:[0,4,7], min:[0,3,7], dim:[0,3,6]};
+
+  function diatonicChord(key, numeral){
+    var idx = DEGREE_INDEX[numeral];
+    var rootPc = (key.pc + MAJOR_STEPS[idx]) % 12;
+    var quality = DEGREE_QUALITY[idx];
+    return {degree:numeral, rootPc:rootPc, quality:quality, tones:TONES_BY_QUALITY[quality]};
+  }
+
+  var PROGRESSIONS = [
+    ["I","IV","V","I"], ["I","V","vi","IV"], ["I","vi","IV","V"],
+    ["I","IV","I","V"], ["ii","V","I","I"]
+  ];
+  function buildProgression(key, barCount){
+    var t = PROGRESSIONS[Math.floor(Math.random()*PROGRESSIONS.length)];
+    var chords = [];
+    for(var i=0;i<barCount;i++) chords.push(diatonicChord(key, t[i % t.length]));
+    return chords;
+  }
+
+  function diatonicPcSet(key){
+    return MAJOR_STEPS.map(function(s){ return (key.pc+s)%12; });
+  }
+
+  // ================= INSTRUMENTS =================
+  // Both bass and guitar are conventionally notated one octave above their
+  // sounding pitch (that's why a bass's open low E lands on the first ledger
+  // line below the bass staff instead of five ledger lines down). `midi`
+  // fields everywhere in the generator are real/sounding pitch; only the
+  // notation step adds this offset.
+  var WRITTEN_OCTAVE_OFFSET = 12;
+
+  var INSTRUMENTS = {
+    bass4:   {id:"bass4",   label:"4-String Bass",  clef:"bass",   lowMidi:28, highMidi:58}, // E1..B3 sounding
+    bass5:   {id:"bass5",   label:"5-String Bass",  clef:"bass",   lowMidi:23, highMidi:53}, // B0..F3 sounding
+    guitar6: {id:"guitar6", label:"6-String Guitar",clef:"treble", lowMidi:40, highMidi:70}  // E2..Bb4 sounding
+  };
+
+  function nearestOctave(pc, near){
+    pc = ((pc%12)+12)%12;
+    if(near===null || near===undefined) near = 34;
+    var best=null, bestDist=Infinity;
+    for(var m=0; m<120; m++){
+      if(m%12===pc){
+        var dist=Math.abs(m-near);
+        if(dist<bestDist){ bestDist=dist; best=m; }
+      }
+    }
+    return best;
+  }
+  function clampToRange(midi, low, high){
+    while(midi<low) midi+=12;
+    while(midi>high) midi-=12;
+    return midi;
+  }
+  function diatonicStepToward(prevMidi, targetMidi, key){
+    var pcs = diatonicPcSet(key);
+    if(prevMidi===targetMidi) return prevMidi;
+    var dir = targetMidi>prevMidi ? 1 : -1;
+    for(var m=prevMidi+dir; Math.abs(m-prevMidi)<=12; m+=dir){
+      if(pcs.indexOf(((m%12)+12)%12)>-1) return m;
+    }
+    return prevMidi;
+  }
+  function chromaticApproach(targetMidi){
+    return Math.random()<0.7 ? targetMidi-1 : targetMidi+1;
+  }
+  function tonesOf(chord, kind){
+    var i = kind==="root"?0:kind==="third"?1:2;
+    return chord.tones[i];
+  }
+
+  // ================= TIME SIGNATURES =================
+  // groups: how the bar is built, beamed, and metronome-clicked.
+  // "s" = one simple beat (4 sixteenth-note units, e.g. one quarter-note pulse)
+  // "c" = one compound beat (6 units, e.g. one dotted-quarter pulse in 6/8)
+  var TIME_SIGS = [
+    {num:4, den:4, groups:["s","s","s","s"], tier:0},
+    {num:3, den:4, groups:["s","s","s"], tier:1},
+    {num:2, den:4, groups:["s","s"], tier:1},
+    {num:6, den:8, groups:["c","c"], tier:2},
+    {num:5, den:4, groups:["s","s","s","s","s"], tier:3},
+    {num:7, den:8, groups:["s","s","c"], tier:3}
+  ];
+  function timeSigWeight(ts, variety){
+    if(ts.tier===0) return 14;
+    if(ts.tier===1) return 6*(variety/100);
+    if(ts.tier===2) return 4*Math.max(0,(variety-15)/85);
+    if(ts.tier===3) return 3*Math.max(0,(variety-45)/55);
+    return 0;
+  }
+  function pickTimeSig(variety){
+    var weights = TIME_SIGS.map(function(ts){ return timeSigWeight(ts, variety); });
+    return weightedPick(TIME_SIGS, weights);
+  }
+  function groupUnits(kind){ return kind==="c" ? 6 : 4; }
+
+  // ================= RHYTHM (per-beat cells) =================
+  // Every slot's unit count maps to exactly one nameable (possibly dotted)
+  // written duration -- see MXML_NOTE_TYPE below -- so syncopation is
+  // produced entirely by tying two adjacent written notes across a
+  // beat/bar boundary, never by faking one attack out of multiple pieces.
+  var SIMPLE_BEAT_CELLS = [ // sums to 4 units (one simple beat)
+    {id:"s-q",         minDiff:1,  tags:[],             tokens:[{u:4}]},
+    {id:"s-ee",        minDiff:21, tags:[],             tokens:[{u:2},{u:2}]},
+    {id:"s-rest",      minDiff:41, tags:["rest"],       tokens:[{u:4,rest:true}]},
+    {id:"s-rest-e",    minDiff:45, tags:["rest"],       tokens:[{u:2,rest:true},{u:2}]},
+    {id:"s-e-rest",    minDiff:45, tags:["rest"],       tokens:[{u:2},{u:2,rest:true}]},
+    {id:"s-dot8-16",   minDiff:65, tags:["sync"],       tokens:[{u:3},{u:1}]},
+    {id:"s-16-dot8",   minDiff:68, tags:["sync"],       tokens:[{u:1},{u:3}]},
+    {id:"s-ssss",      minDiff:75, tags:["sixteenth"],  tokens:[{u:1},{u:1},{u:1},{u:1}]},
+    {id:"s-s-e-s",     minDiff:78, tags:["sixteenth"],  tokens:[{u:1},{u:2},{u:1}]},
+    {id:"s-e-s-s",     minDiff:78, tags:["sixteenth"],  tokens:[{u:2},{u:1},{u:1}]},
+    {id:"s-s-s-e",     minDiff:78, tags:["sixteenth"],  tokens:[{u:1},{u:1},{u:2}]},
+    {id:"s-rest-sss",  minDiff:82, tags:["rest","sixteenth"], tokens:[{u:1,rest:true},{u:1},{u:1},{u:1}]}
+  ];
+  var COMPOUND_BEAT_CELLS = [ // sums to 6 units (one compound/dotted-quarter beat)
+    {id:"c-dq",        minDiff:1,  tags:[],             tokens:[{u:6}]},
+    {id:"c-eee",       minDiff:1,  tags:[],             tokens:[{u:2},{u:2},{u:2}]},
+    {id:"c-e-q",       minDiff:25, tags:[],             tokens:[{u:2},{u:4}]},
+    {id:"c-q-e",       minDiff:25, tags:[],             tokens:[{u:4},{u:2}]},
+    {id:"c-rest",      minDiff:41, tags:["rest"],       tokens:[{u:6,rest:true}]},
+    {id:"c-rest-ee",   minDiff:45, tags:["rest"],       tokens:[{u:2,rest:true},{u:2},{u:2}]},
+    {id:"c-ee-rest",   minDiff:45, tags:["rest"],       tokens:[{u:2},{u:2},{u:2,rest:true}]},
+    {id:"c-ss-e-e",    minDiff:78, tags:["sixteenth"],  tokens:[{u:1},{u:1},{u:2},{u:2}]},
+    {id:"c-e-ss-e",    minDiff:78, tags:["sixteenth"],  tokens:[{u:2},{u:1},{u:1},{u:2}]}
+  ];
+
+  function expandCell(tokens){
+    var slots = [];
+    for(var i=0;i<tokens.length;i++){
+      slots.push({units:tokens[i].u, rest:!!tokens[i].rest});
+    }
+    return slots;
+  }
+
+  function cellWeight(cell, d, eff){
+    var age = clamp((d-cell.minDiff)/40,0,1);
+    var w = 0.4+1.6*age;
+    if(cell.tags.indexOf("rest")>-1) w *= (0.3+eff.restProb*2);
+    if(cell.tags.indexOf("sync")>-1) w *= (0.2+eff.syncProb*2.5);
+    if(cell.tags.indexOf("sixteenth")>-1) w *= (0.3+((d-1)/99)*1.5);
+    return w;
+  }
+  function weightedPick(items, weights){
+    var total=0; for(var i=0;i<weights.length;i++) total+=weights[i];
+    var r=Math.random()*total;
+    for(var i=0;i<items.length;i++){ r-=weights[i]; if(r<=0) return items[i]; }
+    return items[items.length-1];
+  }
+  function pickSimpleCell(d, eff){
+    var eligible = SIMPLE_BEAT_CELLS.filter(function(c){ return d>=c.minDiff; });
+    var weights = eligible.map(function(c){ return cellWeight(c,d,eff); });
+    return weightedPick(eligible, weights);
+  }
+  function pickCompoundCell(d, eff){
+    var eligible = COMPOUND_BEAT_CELLS.filter(function(c){ return d>=c.minDiff; });
+    var weights = eligible.map(function(c){ return cellWeight(c,d,eff); });
+    return weightedPick(eligible, weights);
+  }
+
+  // ================= DIFFICULTY MAPPING =================
+  function restProbAuto(d){ return d<41?0:0.35*clamp((d-41)/59,0,1); }
+  function syncProbAuto(d){ return d<61?0:0.5*clamp((d-61)/39,0,1); }
+  function leapProbAuto(d){ return 0.15+0.45*((d-1)/99); }
+  function accidentalProbAuto(d){ return d<=20?0:0.35*(d-20)/80; }
+  function rangeWidthAuto(d){ return 12+Math.round(12*((d-1)/99)); }
+  function tsigVarietyAuto(d){ return d<=30?0:Math.round(100*clamp((d-30)/70,0,1)); }
+  function difficultyLabel(d){
+    if(d<=20) return "Tier 1 · quarter notes only, no rests, simplest keys";
+    if(d<=40) return "Tier 2 · half/whole notes, simple eighth-note pairs";
+    if(d<=60) return "Tier 3 · rests, eighth-note runs";
+    if(d<=80) return "Tier 4 · syncopation, more accidentals";
+    return "Tier 5 · sixteenth notes, rests, syncopation, wide range";
+  }
+
+  var AUTO_FN = {
+    restProb: restProbAuto, syncProb: syncProbAuto, leapProb: leapProbAuto,
+    accidentalProb: accidentalProbAuto, tsigVariety: tsigVarietyAuto
+  };
+  var knobs = {
+    restProb:{auto:true,value:0}, syncProb:{auto:true,value:0},
+    leapProb:{auto:true,value:0.3}, accidentalProb:{auto:true,value:0},
+    tsigVariety:{auto:true,value:0}
+  };
+  function effective(name, d){
+    var k = knobs[name];
+    return k.auto ? AUTO_FN[name](d) : k.value;
+  }
+
+  // ================= GENERATION =================
+  // Bassline and melody share the same rhythm-cell and chord-progression
+  // machinery; only the pitch choice differs -- basslines anchor low and
+  // lean hard on chord roots, melodies sit higher, favor thirds/steps over
+  // roots, and lean far more on stepwise motion than leaps.
+  function generateBar(chord, nextChord, groupKinds, d, eff, key, prevMidi, range, genType){
+    var isMelody = genType==="melody";
+    var slots = [], groupStartIdx = [];
+    groupKinds.forEach(function(kind){
+      var cell = kind==="c" ? pickCompoundCell(d, eff) : pickSimpleCell(d, eff);
+      var logical = expandCell(cell.tokens);
+      groupStartIdx.push(slots.length);
+      logical.forEach(function(s, si){
+        slots.push({units:s.units, rest:s.rest, groupStart: si===0});
+      });
+    });
+
+    var cursor = prevMidi!==null ? prevMidi
+      : isMelody ? range.lowMidi + Math.round((range.highMidi-range.lowMidi)*0.55)
+      : range.lowMidi+6;
+    var notes = [];
+    for(var idx=0; idx<slots.length; idx++){
+      var slot = slots[idx];
+      if(slot.rest){
+        notes.push({type:"rest", dur:slot.units});
+        continue;
+      }
+      var strong = slot.groupStart;
+      var downbeat = idx===0;
+      var midi;
+      if(strong){
+        var r = Math.random();
+        var kind;
+        if(isMelody){
+          kind = downbeat
+            ? (r<0.35?"root":(r<0.70?"third":"five"))
+            : (r<0.30?"root":(r<0.55?"third":(r<0.80?"five":null)));
+        }else{
+          kind = downbeat
+            ? (r<0.65?"root":(r<0.90?"five":"third"))
+            : (r<0.45?"root":(r<0.75?"five":"third"));
+        }
+        if(kind){
+          midi = nearestOctave(chord.rootPc + tonesOf(chord, kind), cursor);
+        }else{
+          // melodic non-chord strong-beat tone (a diatonic step toward the
+          // chord root, giving an appoggiatura-like leaning tone)
+          midi = diatonicStepToward(cursor, nearestOctave(chord.rootPc, cursor), key);
+        }
+      }else{
+        var isLast = idx===slots.length-1;
+        var targetPc = isLast ? nextChord.rootPc : chord.rootPc;
+        var target = nearestOctave(targetPc, cursor);
+        var r2 = Math.random();
+        var leapP = isMelody ? eff.leapProb*0.35 : eff.leapProb;
+        if(r2 < eff.accidentalProb){
+          midi = chromaticApproach(target);
+        }else if(r2 < eff.accidentalProb + leapP){
+          var kinds = ["root","third","five"];
+          midi = nearestOctave(chord.rootPc + tonesOf(chord, kinds[Math.floor(Math.random()*3)]), cursor);
+        }else{
+          midi = diatonicStepToward(cursor, target, key);
+        }
+      }
+      midi = clampToRange(midi, range.lowMidi, range.highMidi);
+      notes.push({type:"note", midi:midi, dur:slot.units});
+      cursor = midi;
+    }
+    return {notes:notes, lastMidi:cursor, groupStartIdx:groupStartIdx};
+  }
+
+  // A tie is only used for genuine syncopation: `prev` must have started off
+  // the beat within its own beat-group. Tying an on-beat, whole-beat note
+  // forward is what a real engraver would instead just write as one longer
+  // note (e.g. a half note, not two tied quarters) -- ties that ignore this
+  // rule are exactly what read as pointless "tails on tied notes".
+  function applyIntraBarSyncTies(barsArr, eff){
+    barsArr.forEach(function(bar){
+      var notes = bar.notes, starts = bar.groupStartIdx;
+      for(var g=1; g<starts.length; g++){
+        var i = starts[g];
+        var prev = notes[i-1], cur = notes[i];
+        var prevStartedOffBeat = (i-1) !== starts[g-1];
+        if(prev && cur && prev.type==="note" && cur.type==="note" && prevStartedOffBeat && !prev.tieToNext && Math.random()<eff.syncProb*0.5){
+          cur.midi = prev.midi;
+          prev.tieToNext = true;
+          cur.tiedFromPrev = true;
+        }
+      }
+    });
+  }
+
+  function applyCrossBarSyncTies(barsArr, eff){
+    for(var b=0; b<barsArr.length-1; b++){
+      var barA = barsArr[b];
+      var lastIdx = barA.notes.length-1;
+      var lastGroupStart = barA.groupStartIdx[barA.groupStartIdx.length-1];
+      var prevStartedOffBeat = lastIdx !== lastGroupStart;
+      var last = barA.notes[lastIdx];
+      var first = barsArr[b+1].notes[0];
+      if(last && first && last.type==="note" && first.type==="note" && prevStartedOffBeat && !last.tieToNext && Math.random()<eff.syncProb*0.4){
+        first.midi = last.midi;
+        last.tieToNext = true;
+        first.tiedFromPrev = true;
+      }
+    }
+  }
+
+  function generateSong(){
+    var d = +diffEl.value;
+    var instrument = INSTRUMENTS[instrumentEl.value] || INSTRUMENTS.bass4;
+    var genType = (document.querySelector('input[name="genType"]:checked')||{}).value || "bassline";
+    var barCount = barsCount;
+    var tempo = +tempoEl.value;
+    var tsVariety = effective('tsigVariety', d);
+    var keyName = (keyEl.value && KEY_BY_NAME[keyEl.value]) ? keyEl.value : "C";
+    var key = KEY_BY_NAME[keyName];
+    var spellTable = buildSpellTable(key);
+    var progression = buildProgression(key, barCount);
+    var timeSig = pickTimeSig(tsVariety);
+    var eff = {
+      restProb: effective('restProb', d), syncProb: effective('syncProb', d),
+      leapProb: effective('leapProb', d), accidentalProb: effective('accidentalProb', d)
+    };
+    var range = {
+      lowMidi: instrument.lowMidi,
+      highMidi: Math.min(instrument.highMidi, instrument.lowMidi + rangeWidthAuto(d))
+    };
+
+    var barsArr = [], prevMidi = null;
+    for(var i=0;i<barCount;i++){
+      var chord = progression[i];
+      var nextChord = progression[(i+1)%barCount];
+      var built = generateBar(chord, nextChord, timeSig.groups, d, eff, key, prevMidi, range, genType);
+      barsArr.push({chord:chord, notes:built.notes, groupStartIdx:built.groupStartIdx});
+      prevMidi = built.lastMidi;
+    }
+    applyIntraBarSyncTies(barsArr, eff);
+    applyCrossBarSyncTies(barsArr, eff);
+
+    var sng = {
+      key:{name:key.name, vfKey:key.vfKey, pc:key.pc, accidentals:key.acc},
+      instrument:instrument.id, clef:instrument.clef, genType:genType, tempoBpm:tempo, barCount:barCount, difficulty:d,
+      timeSig:{num:timeSig.num, den:timeSig.den, groups:timeSig.groups},
+      bars:barsArr, spellTable:spellTable, eff:eff
+    };
+    buildPlaybackData(sng);
+    return sng;
+  }
+
+  // ---- phrase variation ----
+  // A "variability" of less than max makes the loop replay a few near-copies
+  // of a phrase before generating a fresh one (call & response is easier when
+  // the target isn't brand new every time). varyPhrase() returns such a
+  // near-copy: same key / meter / bar count / chord progression, with a
+  // handful of note pitches nudged and, sometimes, one beat-group's rhythm
+  // reshuffled -- never a change to phrase length, so call/response timing
+  // stays put across a group.
+  function varyPhrase(src){
+    var key = KEY_BY_NAME[src.key.name] || KEY_BY_NAME.C;
+    var d = src.difficulty, eff = src.eff;
+    var inst = INSTRUMENTS[src.instrument] || INSTRUMENTS.bass4;
+    var lo = inst.lowMidi, hi = Math.min(inst.highMidi, inst.lowMidi + rangeWidthAuto(d));
+
+    // deep clone, dropping ties (reapplied below from the new pitches)
+    var bars = src.bars.map(function(b){
+      return {
+        chord: b.chord,
+        groupStartIdx: b.groupStartIdx.slice(),
+        notes: b.notes.map(function(n){ return {type:n.type, midi:n.midi, dur:n.dur}; })
+      };
+    });
+
+    // 1) nudge 1-3 note pitches toward a chord tone or a diatonic step
+    var noteSlots = [];
+    bars.forEach(function(b, bi){ b.notes.forEach(function(n, ni){ if(n.type==="note") noteSlots.push([bi,ni]); }); });
+    if(noteSlots.length){
+      var k = 1 + Math.floor(Math.random()*Math.min(3, noteSlots.length));
+      for(var i=0;i<k;i++){
+        var s = noteSlots[Math.floor(Math.random()*noteSlots.length)];
+        var n = bars[s[0]].notes[s[1]], chord = bars[s[0]].chord, m;
+        if(Math.random() < 0.6){
+          var kinds = ["root","third","five"];
+          m = nearestOctave(chord.rootPc + tonesOf(chord, kinds[Math.floor(Math.random()*3)]), n.midi);
+        }else{
+          m = diatonicStepToward(n.midi, n.midi + (Math.random()<0.5 ? 2 : -2), key);
+        }
+        n.midi = clampToRange(m, lo, hi);
+      }
+    }
+
+    // 2) ~1/3 of the time, rotate the durations within one beat-group
+    //    (note count and bar length unchanged, so the phrase still fits)
+    if(Math.random() < 0.35){
+      var b2 = bars[Math.floor(Math.random()*bars.length)], starts = b2.groupStartIdx;
+      var gi = Math.floor(Math.random()*starts.length);
+      var from = starts[gi], to = (gi+1 < starts.length) ? starts[gi+1] : b2.notes.length;
+      if(to - from >= 2){
+        var durs = [];
+        for(var j=from;j<to;j++) durs.push(b2.notes[j].dur);
+        durs.unshift(durs.pop());
+        for(var j2=from;j2<to;j2++) b2.notes[j2].dur = durs[j2-from];
+      }
+    }
+
+    var out = {
+      key: src.key, instrument: src.instrument, clef: src.clef, genType: src.genType,
+      tempoBpm: +tempoEl.value, barCount: src.barCount, difficulty: d,
+      timeSig: src.timeSig, bars: bars, spellTable: src.spellTable, eff: eff
+    };
+    applyIntraBarSyncTies(bars, eff);
+    applyCrossBarSyncTies(bars, eff);
+    buildPlaybackData(out);
+    return out;
+  }
+
+  // Playback data is derived purely from the generated data model, so it's
+  // available synchronously -- it doesn't need to wait on the (async)
+  // notation render.
+  function buildPlaybackData(sng){
+    var attacks = [], clicks = [], cursorSteps = [];
+    var unitCursor = 0;
+    var beatOffsets = [], barUnits = 0;
+    sng.timeSig.groups.forEach(function(kind, gi){
+      beatOffsets.push({offset:barUnits, accent:gi===0});
+      barUnits += groupUnits(kind);
+    });
+    sng.bars.forEach(function(bar){
+      var barStartUnit = unitCursor;
+      bar.notes.forEach(function(n){
+        cursorSteps.push({startUnits:unitCursor});
+        if(!n.tiedFromPrev){
+          attacks.push({midi:n.type==="note"?n.midi:null, isRest:n.type==="rest", startUnits:unitCursor, dur:n.dur});
+        }
+        unitCursor += n.dur;
+      });
+      beatOffsets.forEach(function(b){ clicks.push({startUnits: barStartUnit+b.offset, accent: b.accent}); });
+    });
+    // How long each attack can ring before the next written event (note or
+    // rest) begins -- ties already collapse to one attacks[] entry spanning
+    // their full combined duration, so this "ring until the next event"
+    // rule gives tied notes their full length for free and lets legato
+    // playback connect consecutive notes with no gap, while still cutting
+    // off cleanly at a rest.
+    attacks.forEach(function(a, i){
+      var nextStart = (i+1<attacks.length) ? attacks[i+1].startUnits : unitCursor;
+      a.ringUnits = nextStart - a.startUnits;
+    });
+    sng.attacks = attacks;
+    sng.clicks = clicks;
+    sng.cursorSteps = cursorSteps;
+    sng.barUnits = barUnits;
+    sng.beatOffsets = beatOffsets;
+    sng.totalUnits = unitCursor;
+  }
+
+  // ================= NOTATION (MusicXML -> OpenSheetMusicDisplay) =================
+  // OSMD is a full engraving engine (line-breaking, justification, beaming,
+  // ties, rest placement) built on MusicXML, so instead of hand-rolling that
+  // layout logic we describe the music precisely and let it do the drawing.
+  // Unit = one 16th note; MusicXML <divisions> is set to 4 (ticks per
+  // quarter note), which makes a unit and a division exactly the same
+  // number -- durations pass straight through with no conversion.
+  var MXML_NOTE_TYPE = {1:"16th", 2:"eighth", 3:"eighth", 4:"quarter", 6:"quarter", 8:"half", 12:"half", 16:"whole"};
+  var MXML_DOTTED = {3:1, 6:1, 12:1};
+  var HARMONY_KIND = {maj:"major", min:"minor", dim:"diminished"};
+  function isBeamableUnit(u){ return u===1 || u===2 || u===3; }
+
+  // Beam state for one contiguous run of beamable notes within a single
+  // beat. We compute this ourselves (rather than asking a library to infer
+  // it) so a figure like [eighth,16th,16th,eighth] always gets one primary
+  // beam across all four notes plus a secondary beam/hook only where a
+  // sixteenth actually needs one -- never split into separate flagged
+  // fragments.
+  function computeBeamTags(durs){
+    var n = durs.length;
+    var level1 = new Array(n), level2 = new Array(n);
+    for(var i=0;i<n;i++) level1[i] = (n===1) ? null : (i===0?"begin":(i===n-1?"end":"continue"));
+    for(var i=0;i<n;i++){
+      if(durs[i]!==1){ level2[i]=null; continue; }
+      var prevIs16 = i>0 && durs[i-1]===1;
+      var nextIs16 = i<n-1 && durs[i+1]===1;
+      if(prevIs16 && nextIs16) level2[i]="continue";
+      else if(!prevIs16 && nextIs16) level2[i]="begin";
+      else if(prevIs16 && !nextIs16) level2[i]="end";
+      else level2[i] = (i===0) ? "forward hook" : "backward hook";
+    }
+    return {level1:level1, level2:level2};
+  }
+
+  function songToMusicXML(sng){
+    var keyDef = KEY_BY_NAME[sng.key.name];
+    var fifths = keyDef.sharpPref ? keyDef.acc : -keyDef.acc;
+    var clefSign = sng.clef==="bass" ? "F" : "G";
+    var clefLine = sng.clef==="bass" ? 4 : 2;
+    var p = [];
+    p.push('<?xml version="1.0" encoding="UTF-8"?>');
+    p.push('<score-partwise version="3.1">');
+    p.push('<part-list><score-part id="P1"><part-name print-object="no">Line</part-name></score-part></part-list>');
+    p.push('<part id="P1">');
+
+    sng.bars.forEach(function(bar, bi){
+      p.push('<measure number="'+(bi+1)+'">');
+      if(bi===0){
+        p.push('<attributes><divisions>4</divisions>'
+          +'<key><fifths>'+fifths+'</fifths><mode>major</mode></key>'
+          +'<time><beats>'+sng.timeSig.num+'</beats><beat-type>'+sng.timeSig.den+'</beat-type></time>'
+          +'<clef><sign>'+clefSign+'</sign><line>'+clefLine+'</line></clef>'
+          +'</attributes>');
+        p.push('<direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>'
+          +sng.tempoBpm+'</per-minute></metronome></direction-type><sound tempo="'+sng.tempoBpm+'"/></direction>');
+      }
+
+      // Chord symbol above the staff: on the first bar, then again wherever
+      // the underlying chord changes from the previous bar.
+      var prevChord = bi>0 ? sng.bars[bi-1].chord : null;
+      if(!prevChord || prevChord.rootPc!==bar.chord.rootPc || prevChord.quality!==bar.chord.quality){
+        var rsp = sng.spellTable[((bar.chord.rootPc%12)+12)%12];
+        p.push('<harmony><root><root-step>'+rsp.letter+'</root-step>'
+          +(rsp.acc?('<root-alter>'+rsp.acc+'</root-alter>'):'')
+          +'</root><kind>'+(HARMONY_KIND[bar.chord.quality]||"major")+'</kind></harmony>');
+      }
+
+      // Precompute beam tags per note index, one contiguous beamable run per beat.
+      var beamTagsByIdx = {};
+      bar.groupStartIdx.forEach(function(startIdx, gi){
+        var endIdx = (gi+1<bar.groupStartIdx.length) ? bar.groupStartIdx[gi+1] : bar.notes.length;
+        var runIdxs = [], runDurs = [];
+        for(var ni=startIdx; ni<endIdx; ni++){
+          var n = bar.notes[ni];
+          if(n.type==="note" && isBeamableUnit(n.dur)){ runIdxs.push(ni); runDurs.push(n.dur); }
+        }
+        if(runIdxs.length>1){
+          var tags = computeBeamTags(runDurs);
+          runIdxs.forEach(function(ni, k){ beamTagsByIdx[ni] = {level1:tags.level1[k], level2:tags.level2[k]}; });
+        }
+      });
+
+      bar.notes.forEach(function(n, ni){
+        var type = MXML_NOTE_TYPE[n.dur];
+        var dotted = !!MXML_DOTTED[n.dur];
+        p.push('<note>');
+        if(n.type==="rest"){
+          p.push('<rest/>');
+        }else{
+          var sp = sng.spellTable[((n.midi%12)+12)%12];
+          var writtenMidi = n.midi + WRITTEN_OCTAVE_OFFSET;
+          var octave = Math.floor((writtenMidi - sp.acc)/12) - 1;
+          p.push('<pitch><step>'+sp.letter+'</step>'+(sp.acc?('<alter>'+sp.acc+'</alter>'):'')+'<octave>'+octave+'</octave></pitch>');
+        }
+        p.push('<duration>'+n.dur+'</duration>');
+        if(n.tiedFromPrev) p.push('<tie type="stop"/>');
+        if(n.tieToNext) p.push('<tie type="start"/>');
+        p.push('<voice>1</voice>');
+        p.push('<type>'+type+'</type>');
+        if(dotted) p.push('<dot/>');
+        var bt = beamTagsByIdx[ni];
+        if(bt){
+          if(bt.level1) p.push('<beam number="1">'+bt.level1+'</beam>');
+          if(bt.level2) p.push('<beam number="2">'+bt.level2+'</beam>');
+        }
+        if(n.tiedFromPrev || n.tieToNext){
+          p.push('<notations>');
+          if(n.tiedFromPrev) p.push('<tied type="stop"/>');
+          if(n.tieToNext) p.push('<tied type="start"/>');
+          p.push('</notations>');
+        }
+        p.push('</note>');
+      });
+
+      p.push('</measure>');
+    });
+
+    p.push('</part></score-partwise>');
+    return p.join('');
+  }
+
+  // Two OSMD instances, one per stacked staff slot. `osmds[activeIdx]` is the
+  // phrase being played/echoed; the other holds the faded next-phrase preview.
+  var osmds = [null, null];
+  function currentInk(){
+    return getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || "#211C14";
+  }
+  function osmdOf(i){
+    if(!osmds[i]){
+      osmds[i] = new opensheetmusicdisplay.OpenSheetMusicDisplay("osmd"+i, {
+        backend: "canvas",
+        autoResize: true,
+        drawTitle: false,
+        drawPartNames: false,
+        drawMetronomeMarks: true
+      });
+    }
+    return osmds[i];
+  }
+
+  // Setting EngravingRules.DefaultColorMusic directly only changes that one
+  // field -- notehead/stem/rest colors are separate fields that only get
+  // updated by calling applyDefaultColorMusic(), which cascades the color to
+  // all of them. Skipping that left noteheads/stems black in dark mode even
+  // though the staff lines (which do read DefaultColorMusic directly) picked
+  // up the theme color correctly.
+  function applyThemeColor(inst){
+    inst.EngravingRules.applyDefaultColorMusic(currentInk());
+  }
+
+  function renderInto(i, sng){
+    var inst = osmdOf(i);
+    var xml = songToMusicXML(sng);
+    return inst.load(xml).then(function(){
+      applyThemeColor(inst);
+      inst.render();
+    }).catch(function(err){
+      console.error("Notation render failed:", err);
+    });
+  }
+
+  function redrawColors(){
+    [0,1].forEach(function(i){
+      var inst = osmds[i];
+      if(!inst || !inst.Sheet) return;
+      applyThemeColor(inst);
+      inst.render();
+    });
+    // inst.render() re-creates the cursor at note 0 -- if a call/response
+    // loop is running, put the active cursor back where the audio is.
+    if(playing && phase!=="leadin"){
+      var a = osmds[activeIdx];
+      if(a && a.cursor){
+        try{
+          a.cursor.reset();
+          for(var k=0;k<shownCursorIdx;k++) a.cursor.next();
+          a.cursor.show();
+        }catch(e){}
+      }
+    }
+  }
+
+  // ================= AUDIO =================
+  var actx=null, master=null, lp=null, noteBus=null;
+  var playing=false, scheduler=null, rafId=null;
+  var stepCounter=0, nextStepTime=0, attackCursor=0, clickCursor=0, cursorStepIdx=0;
+  var playhead=[], live=[];
+
+  // ---- Call & Response loop state ----
+  // phase: "leadin" (one-time count-in) -> "call" (phrase plays) ->
+  // "response" (same bars, same notation, cursor tracks, NOTHING sounds) ->
+  // "call" (a fresh phrase) -> ... forever, until Stop.
+  // stepCounter runs 0..song.totalUnits-1 within call/response and is reset
+  // to 0 at every boundary; nextStepTime is NEVER touched by a boundary, so
+  // the click grid marches on with no hitch across the whole session.
+  var phase="leadin";
+  var activeIdx=0;           // which staff slot / OSMD holds the phrase now playing
+  var pendingSong=null;      // the next phrase -- already rendered into the preview slot
+  var renderToken=0;         // bumped on Start/Stop/preview-render; voids stale render .then()s
+  var shownCursorIdx=0;      // cursor position as actually applied by renderLoop (audio-synced)
+
+  // Variability: how many near-copies of a phrase to play before a fresh one.
+  var groupOrigin=null;      // the freshly-generated phrase the current group varies
+  var groupPos=0;            // how many phrases of the current group have been made
+  function variabilityGroupSize(){
+    var v = +variabEl.value;               // 0-100
+    return v<25 ? 4 : v<50 ? 3 : v<75 ? 2 : 1;
+  }
+
+  // Note volume slider is 0-100%, where 100% is double the original fixed
+  // level (the metronome click bypasses this bus entirely, connecting
+  // straight to master, which is why notes needed the boost to match it).
+  function noteVolumeGain(){ return (+volEl.value/100) * 2; }
+  function ensureAudio(){
+    if(actx) return;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    actx = new AC();
+    master = actx.createGain(); master.gain.value = 0.55;
+    lp = actx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=1600; lp.Q.value=0.5;
+    noteBus = actx.createGain(); noteBus.gain.value=noteVolumeGain();
+    noteBus.connect(lp); lp.connect(master); master.connect(actx.destination);
+  }
+  function mtof(m){ return 440*Math.pow(2,(m-69)/12); }
+  function playNote(freq, t, dur, legato){
+    var o1=actx.createOscillator(); o1.type="triangle"; o1.frequency.value=freq;
+    var o2=actx.createOscillator(); o2.type="sine"; o2.frequency.value=freq/2;
+    var sub=actx.createGain(); sub.gain.value=0.45;
+    var g=actx.createGain();
+    o1.connect(g); o2.connect(sub); sub.connect(g); g.connect(noteBus);
+    var peak=0.26, atk=Math.min(0.02,dur*0.25);
+    // Legato needs an actual sustained plateau, not just a longer duration:
+    // the old envelope started decaying toward silence ~0.16s after the
+    // attack regardless of dur, so a "longer" note was really just a
+    // slower fade-out -- audibly gone well before the next note began.
+    // Hold near peak until just before the note ends, then a short release.
+    var release = legato ? Math.min(0.05,dur*0.3) : Math.min(0.16,dur*0.6);
+    var sustainLevel = legato ? peak*0.9 : peak*0.75;
+    var releaseStart = Math.max(t+atk, t+dur-release);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(peak,t+atk);
+    g.gain.exponentialRampToValueAtTime(sustainLevel, releaseStart);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o1.start(t); o2.start(t);
+    var end=t+dur+0.05;
+    o1.stop(end); o2.stop(end);
+    live.push(o1,o2);
+    o1.onended=function(){
+      var k=live.indexOf(o1); if(k>-1) live.splice(k,1);
+      k=live.indexOf(o2); if(k>-1) live.splice(k,1);
+    };
+  }
+  function playClick(t, accent){
+    var o=actx.createOscillator(); o.type="square"; o.frequency.value = accent?1800:1200;
+    var g=actx.createGain();
+    o.connect(g); g.connect(master);
+    var peak = accent?0.32:0.20;
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(peak, t+0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+0.045);
+    o.start(t); o.stop(t+0.05);
+    live.push(o);
+    o.onended=function(){ var k=live.indexOf(o); if(k>-1) live.splice(k,1); };
+  }
+
+  function setPhaseBadge(kind){
+    if(!phaseBadge) return;
+    if(!kind){ phaseBadge.hidden = true; phaseBadge.textContent = ""; return; }
+    phaseBadge.hidden = false;
+    phaseBadge.className = "phase-badge "+kind;
+    phaseBadge.textContent = kind==="countin" ? "● Count-in"
+      : kind==="call" ? "● Listen" : "○ Your turn";
+  }
+
+  function slotEl(i){ return $("nslot"+i); }
+
+  // Generate the next phrase and render it, dimmed, into the OTHER staff slot
+  // so it fades in below the one being played. Called when a call phase
+  // begins (for the first phrase and after every swap). Depending on the
+  // Variability setting the "next phrase" is either a fresh generation or a
+  // near-copy of the current group's origin.
+  function spawnPreview(){
+    if(!playing) return;
+    var pIdx = 1-activeIdx, sng;
+    try{
+      if(groupPos >= variabilityGroupSize()){
+        sng = generateSong();
+        groupOrigin = sng;
+        groupPos = 1;
+      }else{
+        sng = varyPhrase(groupOrigin || song);
+        groupPos++;
+      }
+    }catch(e){ pendingSong = null; return; }
+    pendingSong = sng;
+    var pk = ++renderToken;
+    var slot = slotEl(pIdx);
+    slot.hidden = false;
+    slot.classList.remove("popping");
+    slot.classList.add("preview");
+    slot.style.order = "1";
+    slot.style.opacity = "0";          // fade in once the render lands
+    renderInto(pIdx, sng).then(function(){
+      if(pk!==renderToken || !playing || activeIdx===pIdx) return;
+      try{ if(osmds[pIdx].cursor) osmds[pIdx].cursor.hide(); }catch(e){}
+      requestAnimationFrame(function(){ slot.style.opacity = ""; });
+    });
+  }
+
+  function schedule(){
+    if(!playing || !actx || !song) return;
+    var spb = 60/(+tempoEl.value);
+    var s16 = spb/4;
+    while(nextStepTime < actx.currentTime + 0.12){
+
+      // -------- phase state machine: advances no time, sounds nothing here --------
+      if(phase!=="leadin" && stepCounter >= song.totalUnits){
+        if(phase==="call"){
+          // Call finished -> silent response over the very same bars. Notation
+          // stays exactly as it is; the cursor just runs the phrase again.
+          phase="response";
+          stepCounter=0; attackCursor=0; clickCursor=0; cursorStepIdx=0;
+          playhead.push({t:nextStepTime, phase:"response", resetCursor:true, slotIdx:activeIdx});
+        }else if(pendingSong){
+          // Response finished -> the preview staff (already rendered, dimmed)
+          // becomes the active one: it slides up as the old staff pops out.
+          var oldIdx = activeIdx;
+          song = pendingSong; pendingSong = null;
+          activeIdx = 1-activeIdx;
+          phase="call";
+          stepCounter=0; attackCursor=0; clickCursor=0; cursorStepIdx=0;
+          playhead.push({t:nextStepTime, phase:"call", resetCursor:true, slotIdx:activeIdx, swap:true, oldSlot:oldIdx});
+        }else{
+          // Preview not ready (generator hiccup) -- just replay this phrase and
+          // try to build a preview again.
+          phase="call";
+          stepCounter=0; attackCursor=0; clickCursor=0; cursorStepIdx=0;
+          playhead.push({t:nextStepTime, phase:"call", resetCursor:true, slotIdx:activeIdx, first:true});
+        }
+        // fall through: schedule step 0 of the new pass at this same nextStepTime
+      }
+      if(phase==="leadin" && stepCounter===0){
+        // One-time count-in just ended: first call begins now.
+        phase="call";
+        playhead.push({t:nextStepTime, phase:"call", resetCursor:true, slotIdx:activeIdx, first:true});
+      }
+
+      // -------- schedule the current 16th --------
+      if(phase==="leadin"){
+        // Metronome only, in the piece's own beat pattern so the count-in
+        // pulses like the phrase. Click is always on in this tool.
+        var posInBar = ((stepCounter % song.barUnits) + song.barUnits) % song.barUnits;
+        for(var bi=0; bi<song.beatOffsets.length; bi++){
+          if(song.beatOffsets[bi].offset===posInBar){
+            playClick(nextStepTime, song.beatOffsets[bi].accent);
+            break;
+          }
+        }
+      }else{
+        var att = song.attacks[attackCursor];
+        if(att && att.startUnits===stepCounter){
+          // The response pass is identical to the call except no note sounds.
+          if(!att.isRest && phase==="call"){
+            var legato = legatoToggle.checked;
+            var noteDur = legato ? att.ringUnits*s16 : att.ringUnits*s16*0.55;
+            playNote(mtof(att.midi), nextStepTime, Math.max(noteDur, s16*0.5), legato);
+          }
+          attackCursor++;
+        }
+        var clk = song.clicks[clickCursor];
+        if(clk && clk.startUnits===stepCounter){
+          playClick(nextStepTime, clk.accent);
+          clickCursor++;
+        }
+        while(cursorStepIdx+1 < song.cursorSteps.length && song.cursorSteps[cursorStepIdx+1].startUnits===stepCounter){
+          cursorStepIdx++;
+          playhead.push({t:nextStepTime, advanceCursor:true, slotIdx:activeIdx});
+        }
+      }
+
+      stepCounter++;
+      nextStepTime += s16;
+    }
+  }
+  function renderLoop(){
+    if(actx){
+      var now=actx.currentTime;
+      while(playhead.length && playhead[0].t<=now+0.001){
+        var ev=playhead.shift();
+        if(ev.phase){
+          playLabel.textContent = "Stop";
+          setPhaseBadge(ev.phase);
+          if(ev.phase==="call") updateGenInfo();
+          if(ev.first) spawnPreview();
+        }
+        if(ev.swap){
+          // Old staff pops out of existence; the preview below slides up into
+          // its place. After the transition, recycle the empty slot as the
+          // next preview.
+          var oldSlot = slotEl(ev.oldSlot), newSlot = slotEl(ev.slotIdx);
+          newSlot.classList.remove("preview");
+          newSlot.style.opacity = "";
+          newSlot.style.order = "0";
+          oldSlot.style.order = "1";
+          oldSlot.classList.add("popping");
+          setTimeout(function(){
+            oldSlot.classList.remove("popping");
+            oldSlot.hidden = true;
+            try{ if(osmds[ev.oldSlot].cursor) osmds[ev.oldSlot].cursor.hide(); }catch(e){}
+            spawnPreview();
+          }, 420);
+        }
+        if(ev.resetCursor){
+          shownCursorIdx = 0;
+          var rc = osmds[ev.slotIdx];
+          if(rc && rc.cursor){ try{ rc.cursor.reset(); rc.cursor.show(); }catch(e){} }
+        }
+        if(ev.advanceCursor){
+          shownCursorIdx++;
+          var ac = osmds[ev.slotIdx];
+          if(ac && ac.cursor){ try{ ac.cursor.next(); }catch(e){} }
+        }
+      }
+    }
+    if(playing) rafId=requestAnimationFrame(renderLoop);
+  }
+  function hardStopNodes(){
+    live.slice().forEach(function(n){ try{ n.stop(); }catch(e){} });
+    live.length=0;
+  }
+  function setPlayUI(on, isLeadIn){
+    playBtn.classList.toggle("playing", on);
+    playBtn.setAttribute("aria-pressed", on?"true":"false");
+    playLabel.textContent = on ? (isLeadIn?"Count-in…":"Stop") : "Start";
+    playBtn.querySelector(".glyph").innerHTML = on?"&#9632;":"&#9654;";
+    consoleEl.classList.toggle("locked", on);
+    if(!on) setPhaseBadge(null);
+  }
+  function normaliseStaves(){
+    // Active phrase alone, on top, full opacity; the other slot hidden.
+    var A=slotEl(activeIdx), B=slotEl(1-activeIdx);
+    A.hidden=false; A.classList.remove("preview","popping"); A.style.opacity=""; A.style.order="0";
+    B.hidden=true;  B.classList.remove("preview","popping"); B.style.opacity=""; B.style.order="1";
+  }
+  function startPlayback(){
+    // Flush a pending settings-change reseed so we start on the right phrase.
+    if(reseedTimer){ clearTimeout(reseedTimer); reseedTimer=null; seedPhrase(); }
+    if(!song) return;
+    ensureAudio();
+    if(actx.state==="suspended") actx.resume();
+    phase="leadin";
+    pendingSong=null;
+    shownCursorIdx=0;
+    renderToken++;           // void any stale preview render .then() from before
+    groupOrigin=song; groupPos=1;   // the shown phrase starts a fresh variation group
+    normaliseStaves();
+    stepCounter = -(leadIn*song.barUnits);
+    attackCursor=0; clickCursor=0; cursorStepIdx=0;
+    nextStepTime = actx.currentTime+0.15;
+    playhead=[];
+    playing=true;
+    setPlayUI(true, leadIn>0);
+    setPhaseBadge(leadIn>0 ? "countin" : "call");
+    var a=osmds[activeIdx];
+    try{ if(a && a.cursor){ a.cursor.reset(); if(leadIn===0) a.cursor.show(); } }catch(e){}
+    schedule();
+    scheduler=setInterval(schedule,25);
+    rafId=requestAnimationFrame(renderLoop);
+  }
+  function stopPlayback(){
+    playing=false;
+    renderToken++;           // void any in-flight preview render .then()
+    if(scheduler){ clearInterval(scheduler); scheduler=null; }
+    if(rafId){ cancelAnimationFrame(rafId); rafId=null; }
+    playhead=[];
+    pendingSong=null;
+    phase="leadin";
+    if(actx){
+      master.gain.cancelScheduledValues(actx.currentTime);
+      hardStopNodes();
+    }
+    [0,1].forEach(function(i){ try{ if(osmds[i] && osmds[i].cursor) osmds[i].cursor.hide(); }catch(e){} });
+    normaliseStaves();       // drop the preview staff, keep what was playing on top
+    setPlayUI(false);
+  }
+
+  // ================= ELEMENTS =================
+  var consoleEl=$("console");
+  var instrumentEl=$("instrument");
+  var diffEl=$("diff"), diffVal=$("diffVal"), diffTier=$("diffTier");
+  var tempoEl=$("tempo"), tempoVal=$("tempoVal");
+  var volToggle=$("volToggle"), volPanel=$("volPanel"), volEl=$("k-vol"), volVal=$("k-vol-val");
+  var barsMinus=$("barsMinus"), barsPlus=$("barsPlus"), barsVal=$("barsVal");
+  var leadMinus=$("leadMinus"), leadPlus=$("leadPlus"), leadVal=$("leadVal");
+  var playBtn=$("playBtn"), playLabel=$("playLabel");
+  var advToggle=$("advToggle"), advPanel=$("advPanel"), advReset=$("advReset");
+  var kRest=$("k-rest"), kSync=$("k-sync"), kLeap=$("k-leap"), kAcc=$("k-acc");
+  var kRestVal=$("k-rest-val"), kSyncVal=$("k-sync-val"), kLeapVal=$("k-leap-val"), kAccVal=$("k-acc-val");
+  var kTsig=$("k-tsig"), kTsigVal=$("k-tsig-val");
+  var variabEl=$("k-var"), variabVal=$("k-var-val"), varTier=$("varTier");
+  var legatoToggle=$("legatoToggle");
+  var keyEl=$("key"), genInfo=$("genInfo"), phaseBadge=$("phaseBadge"), themeBtn=$("themeBtn");
+
+  var barsCount = 1;
+  var leadIn = 1;
+  var song = null;
+
+  // ---- build the (single, fixed-for-the-session) key selector ----
+  KEY_NAMES.forEach(function(name){
+    var opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name.replace("b","♭")+" major";
+    keyEl.appendChild(opt);
+  });
+  keyEl.value = "C";
+  keyEl.addEventListener("change", function(){ store("cr-key", keyEl.value); reseedIfIdle(); });
+
+  function refreshAdvancedUI(){
+    var d = +diffEl.value;
+    diffVal.textContent = d;
+    diffTier.textContent = difficultyLabel(d);
+
+    if(knobs.restProb.auto) kRest.value = Math.round(restProbAuto(d)*100);
+    if(knobs.syncProb.auto) kSync.value = Math.round(syncProbAuto(d)*100);
+    if(knobs.leapProb.auto) kLeap.value = Math.round(leapProbAuto(d)*100);
+    if(knobs.accidentalProb.auto) kAcc.value = Math.round(accidentalProbAuto(d)*100);
+    if(knobs.tsigVariety.auto) kTsig.value = tsigVarietyAuto(d);
+    kRestVal.textContent = kRest.value;
+    kSyncVal.textContent = kSync.value;
+    kLeapVal.textContent = kLeap.value;
+    kAccVal.textContent = kAcc.value;
+    kTsigVal.textContent = kTsig.value;
+  }
+
+  // Variability is a standalone preference, not a difficulty-derived knob, so
+  // it isn't part of `knobs` / "Reset to difficulty".
+  function refreshVariabUI(){
+    var g = variabilityGroupSize();
+    variabVal.textContent = variabEl.value;
+    varTier.textContent = g===1
+      ? "A new phrase every time"
+      : "Repeats "+g+" similar phrases, then a new one";
+  }
+  variabEl.addEventListener("input", function(){
+    store("cr-variability", variabEl.value);
+    refreshVariabUI();
+  });
+
+  function wireKnob(el, valEl, name, fromUI){
+    el.addEventListener("input", function(){
+      knobs[name].auto = false;
+      knobs[name].value = fromUI(+el.value);
+      valEl.textContent = el.value;
+      store("cr-knobs", JSON.stringify(knobs));
+      reseedIfIdle();
+    });
+  }
+  wireKnob(kRest, kRestVal, "restProb", function(v){ return v/100; });
+  wireKnob(kSync, kSyncVal, "syncProb", function(v){ return v/100; });
+  wireKnob(kLeap, kLeapVal, "leapProb", function(v){ return v/100; });
+  wireKnob(kAcc, kAccVal, "accidentalProb", function(v){ return v/100; });
+  wireKnob(kTsig, kTsigVal, "tsigVariety", function(v){ return v; });
+
+  advToggle.addEventListener("click", function(){
+    var open = advPanel.hidden;
+    advPanel.hidden = !open;
+    advToggle.setAttribute("aria-expanded", open?"true":"false");
+    advToggle.innerHTML = open ? "Advanced &#9662;" : "Advanced &#9656;";
+  });
+
+  volToggle.addEventListener("click", function(){
+    var open = volPanel.hidden;
+    volPanel.hidden = !open;
+    volToggle.setAttribute("aria-expanded", open?"true":"false");
+    volToggle.innerHTML = open ? "Volume &#9662;" : "Volume &#9656;";
+  });
+  volEl.addEventListener("input", function(){
+    volVal.textContent = volEl.value;
+    store("cr-vol", volEl.value);
+    if(noteBus) noteBus.gain.value = noteVolumeGain();
+  });
+  advReset.addEventListener("click", function(){
+    Object.keys(knobs).forEach(function(n){ knobs[n].auto = true; });
+    store("cr-knobs", JSON.stringify(knobs));
+    refreshAdvancedUI();
+    reseedIfIdle();
+  });
+
+  diffEl.addEventListener("input", function(){
+    store("cr-difficulty", diffEl.value);
+    refreshAdvancedUI();
+    reseedIfIdle();
+  });
+
+  instrumentEl.addEventListener("change", function(){
+    store("cr-instrument", instrumentEl.value);
+    reseedIfIdle();
+  });
+
+  document.querySelectorAll('input[name="genType"]').forEach(function(r){
+    r.addEventListener("change", function(){ store("cr-gentype", r.value); reseedIfIdle(); });
+  });
+
+  legatoToggle.addEventListener("change", function(){
+    store("cr-legato", legatoToggle.checked?"1":"0");
+  });
+
+  var tempoRenderTimer = null;
+  tempoEl.addEventListener("input", function(){
+    tempoVal.textContent = tempoEl.value;
+    store("cr-tempo", tempoEl.value);
+    if(song){
+      song.tempoBpm = +tempoEl.value;
+      // Don't re-render mid-loop -- that re-inits the OSMD cursor. The
+      // scheduler re-reads tempo every tick, so the loop already follows.
+      if(!playing){
+        if(tempoRenderTimer) clearTimeout(tempoRenderTimer);
+        tempoRenderTimer = setTimeout(function(){ renderInto(activeIdx, song); }, 150);
+      }
+    }
+  });
+
+  function setBars(v){
+    barsCount = clamp(v,1,2);
+    barsVal.textContent = barsCount;
+    store("cr-bars", barsCount);
+    barsMinus.disabled = barsCount<=1;
+    barsPlus.disabled = barsCount>=2;
+  }
+  barsMinus.addEventListener("click", function(){ setBars(barsCount-1); reseedIfIdle(); });
+  barsPlus.addEventListener("click", function(){ setBars(barsCount+1); reseedIfIdle(); });
+
+  function setLeadIn(v){
+    leadIn = clamp(v,0,4);
+    leadVal.textContent = leadIn;
+    store("cr-leadin", leadIn);
+    leadMinus.disabled = leadIn<=0;
+    leadPlus.disabled = leadIn>=4;
+  }
+  leadMinus.addEventListener("click", function(){ setLeadIn(leadIn-1); });
+  leadPlus.addEventListener("click", function(){ setLeadIn(leadIn+1); });
+
+  function updateGenInfo(){
+    if(!song) return;
+    genInfo.textContent = (song.genType==="melody"?"Melody":"Bassline")+" · "+song.key.name.replace("b","♭")+" major · "+song.timeSig.num+"/"+song.timeSig.den+
+      " · "+song.tempoBpm+" BPM · "+song.barCount+(song.barCount===1?" bar":" bars")+" · "+INSTRUMENTS[song.instrument].label;
+  }
+  // Seed the top staff with a phrase so the page isn't empty before Start.
+  // From then on every phrase is generated by the loop itself.
+  function seedPhrase(){
+    if(playing) return;
+    activeIdx = 0;
+    song = generateSong();
+    groupOrigin = song; groupPos = 1;
+    renderInto(0, song);
+    normaliseStaves();
+    updateGenInfo();
+  }
+  // A generation-affecting control changed while stopped -- there's no
+  // Generate button, so swap the shown phrase for one at the new settings
+  // (debounced so dragging a slider doesn't thrash the renderer).
+  var reseedTimer = null;
+  function reseedIfIdle(){
+    if(playing) return;
+    if(reseedTimer) clearTimeout(reseedTimer);
+    reseedTimer = setTimeout(seedPhrase, 130);
+  }
+  playBtn.addEventListener("click", function(){
+    if(playing) stopPlayback(); else startPlayback();
+  });
+
+  // ---- theme ----
+  function applyTheme(t){
+    if(t==="light" || t==="dark") document.documentElement.setAttribute("data-theme", t);
+    else document.documentElement.removeAttribute("data-theme");
+  }
+  themeBtn.addEventListener("click", function(){
+    var cur = document.documentElement.getAttribute("data-theme");
+    var next = cur==="dark" ? "light" : "dark";
+    applyTheme(next); store("theme", next);
+    redrawColors();
+  });
+
+  // ---- expand ----
+  var expandBtn = $("expandBtn");
+  function setExpanded(on){
+    consoleEl.classList.toggle("expanded", on);
+    expandBtn.setAttribute("aria-pressed", on?"true":"false");
+    expandBtn.setAttribute("aria-label", on?"Exit fullscreen":"Expand to fill screen");
+    expandBtn.innerHTML = on?"&#10529;":"&#10530;";
+    // The console's own size changed, not the window's, so OSMD's resize
+    // listener never fires -- force both staves to re-measure and re-justify.
+    requestAnimationFrame(function(){
+      [0,1].forEach(function(i){ if(osmds[i] && osmds[i].Sheet) try{ osmds[i].render(); }catch(e){} });
+    });
+  }
+  expandBtn.addEventListener("click", function(){
+    setExpanded(!consoleEl.classList.contains("expanded"));
+  });
+  document.addEventListener("keydown", function(e){
+    if(e.key==="Escape" && consoleEl.classList.contains("expanded")) setExpanded(false);
+  });
+
+  // ---- restore ----
+  (function restore(){
+    var t = recall("theme"); if(t) applyTheme(t);
+    var iv = recall("cr-instrument"); if(iv && INSTRUMENTS[iv]) instrumentEl.value = iv;
+    var gt = recall("cr-gentype");
+    if(gt){ var gtEl=document.querySelector('input[name="genType"][value="'+gt+'"]'); if(gtEl) gtEl.checked=true; }
+    var dv = recall("cr-difficulty"); if(dv && +dv>=1 && +dv<=100) diffEl.value = dv;
+    var tv = recall("cr-tempo"); if(tv && +tv>=40 && +tv<=160){ tempoEl.value = tv; tempoVal.textContent = tv; }
+    var vv = recall("cr-vol"); if(vv!==null && +vv>=0 && +vv<=100){ volEl.value = vv; volVal.textContent = vv; }
+    var kv = recall("cr-key"); if(kv && KEY_BY_NAME[kv]) keyEl.value = kv;
+    var bv = recall("cr-bars"); if(bv && +bv>=1 && +bv<=2) barsCount = +bv;
+    var lv = recall("cr-leadin"); if(lv!==null && +lv>=0 && +lv<=4) leadIn = +lv;
+    var lgv = recall("cr-legato"); if(lgv!==null) legatoToggle.checked = lgv==="1";
+    var vb = recall("cr-variability"); if(vb!==null && +vb>=0 && +vb<=100) variabEl.value = vb;
+    var kn = recall("cr-knobs");
+    if(kn){ try{ var parsed=JSON.parse(kn); Object.keys(parsed).forEach(function(n){ if(knobs[n]) knobs[n]=parsed[n]; }); }catch(e){} }
+  })();
+
+  setBars(barsCount);
+  setLeadIn(leadIn);
+  refreshAdvancedUI();
+  refreshVariabUI();
+  seedPhrase();
+})();
+</script>
+</body>
+</html>
